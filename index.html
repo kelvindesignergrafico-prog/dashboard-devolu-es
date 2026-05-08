@@ -1,0 +1,3166 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>Controle de Devoluções · Shopee</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet"/>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<!-- Supabase via direct REST API (no SDK) -->
+<style>
+:root {
+  --bg: #080a0f;
+  --s0: #0d1017;
+  --s1: #121620;
+  --s2: #171c28;
+  --s3: #1d2335;
+  --border: #252d42;
+  --border2: #2e3850;
+  --shopee: #ff4820;
+  --shopee2: #ff6b47;
+  --green: #00e5a0;
+  --yellow: #ffc540;
+  --red: #ff4d6d;
+  --blue: #4db8ff;
+  --purple: #b388ff;
+  --gray: #4a5578;
+  --text: #e2e8f8;
+  --text2: #8892b0;
+  --text3: #4a5578;
+  --font: 'Space Grotesk', sans-serif;
+  --mono: 'JetBrains Mono', monospace;
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html,body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:14px;min-height:100vh;overflow-x:hidden}
+::-webkit-scrollbar{width:4px;height:4px}
+::-webkit-scrollbar-track{background:var(--s0)}
+::-webkit-scrollbar-thumb{background:var(--border2);border-radius:2px}
+button{font-family:var(--font);cursor:pointer}
+input,select,textarea{font-family:var(--font)}
+
+/* ── NOISE OVERLAY ── */
+body::before{content:'';position:fixed;inset:0;opacity:.025;pointer-events:none;z-index:0;
+  background-image:url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  background-size:200px}
+
+/* ── LAYOUT ── */
+#app{position:relative;z-index:1;display:flex;flex-direction:column;min-height:100vh}
+
+/* ── HEADER ── */
+#hdr{background:var(--s0);border-bottom:1px solid var(--border);position:sticky;top:0;z-index:200;backdrop-filter:blur(12px)}
+#hdr-inner{max-width:1400px;margin:0 auto;padding:0 28px;height:58px;display:flex;align-items:center;gap:16px}
+.logo{display:flex;align-items:center;gap:10px;flex-shrink:0}
+.logo-icon{width:34px;height:34px;border-radius:9px;background:linear-gradient(135deg,var(--shopee),var(--shopee2));display:flex;align-items:center;justify-content:center;font-size:17px;box-shadow:0 0 20px #ff482033}
+.logo-text{font-size:13px;font-weight:700;letter-spacing:.5px}
+.logo-text span{color:var(--shopee)}
+#hdr-meta{font-size:11px;color:var(--text3);font-family:var(--mono)}
+.hdr-gap{flex:1}
+.hdr-actions{display:flex;gap:8px;align-items:center}
+
+/* ── BUTTONS ── */
+.btn{display:inline-flex;align-items:center;gap:6px;padding:7px 14px;border-radius:8px;font-size:12px;font-weight:600;border:none;transition:all .15s;white-space:nowrap}
+.btn-ghost{background:transparent;border:1px solid var(--border2);color:var(--text2)}
+.btn-ghost:hover{border-color:var(--border2);background:var(--s2);color:var(--text)}
+.btn-primary{background:var(--shopee);color:#fff;box-shadow:0 0 16px #ff482022}
+.btn-primary:hover{background:var(--shopee2);box-shadow:0 0 24px #ff482044}
+.btn-green{background:var(--green);color:#000;font-weight:700}
+.btn-green:hover{opacity:.9}
+.btn-sm{padding:4px 10px;font-size:11px}
+.btn-icon{padding:7px;border-radius:8px;background:var(--s2);border:1px solid var(--border);color:var(--text2)}
+.btn-icon:hover{background:var(--s3);color:var(--text)}
+
+/* ── UPLOAD BTN ── */
+#upload-label{display:flex;align-items:center;gap:8px;cursor:pointer;padding:7px 14px;border-radius:8px;border:1px dashed var(--border2);background:var(--s1);transition:all .2s;font-size:12px;font-weight:600;color:var(--text2)}
+#upload-label:hover{border-color:var(--shopee);color:var(--shopee);background:var(--s2)}
+#upload-label.loaded{border-color:var(--green);color:var(--green);border-style:solid}
+#file-input{display:none}
+
+/* ── TOAST ── */
+#toast{position:fixed;bottom:28px;right:28px;z-index:9999;display:flex;flex-direction:column;gap:8px;pointer-events:none}
+.toast-item{background:var(--s2);border:1px solid var(--border2);border-radius:10px;padding:10px 16px;font-size:12px;font-weight:600;display:flex;align-items:center;gap:8px;animation:slideIn .3s ease;box-shadow:0 8px 32px #0008;min-width:220px}
+.toast-item.success{border-color:#00e5a044;color:var(--green)}
+.toast-item.info{border-color:#4db8ff44;color:var(--blue)}
+.toast-item.warn{border-color:#ffc54044;color:var(--yellow)}
+@keyframes slideIn{from{opacity:0;transform:translateX(20px)}to{opacity:1;transform:none}}
+@keyframes slideOut{from{opacity:1;transform:none}to{opacity:0;transform:translateX(20px)}}
+
+/* ── SIDEBAR ── */
+#layout{display:flex;flex:1;max-width:1400px;margin:0 auto;width:100%;padding:0 28px 40px;gap:20px;margin-top:20px}
+#sidebar{width:220px;flex-shrink:0;display:flex;flex-direction:column;gap:6px}
+.nav-section{font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:1.5px;padding:0 10px;margin-top:12px;margin-bottom:4px}
+.nav-btn{display:flex;align-items:center;gap:9px;padding:9px 12px;border-radius:9px;border:none;background:transparent;color:var(--text2);font-size:13px;font-weight:500;width:100%;text-align:left;transition:all .15s}
+.nav-btn:hover{background:var(--s2);color:var(--text)}
+.nav-btn.active{background:var(--s3);color:var(--text);border:1px solid var(--border)}
+.nav-btn .nb-icon{font-size:15px;width:20px;text-align:center}
+.nav-btn .nb-badge{margin-left:auto;background:var(--shopee);color:#fff;font-size:10px;font-weight:700;padding:1px 7px;border-radius:10px;font-family:var(--mono)}
+
+/* ── SHEETS PANEL ── */
+.sheet-item{display:flex;align-items:center;gap:8px;padding:8px 12px;border-radius:9px;border:none;background:transparent;width:100%;text-align:left;cursor:pointer;transition:all .15s;color:var(--text2)}
+.sheet-item:hover{background:var(--s2);color:var(--text)}
+.sheet-item.active{background:var(--s3);border:1px solid var(--border);color:var(--text)}
+.sheet-dot{width:7px;height:7px;border-radius:50%;background:var(--shopee);flex-shrink:0}
+.sheet-name{font-size:12px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1}
+.sheet-date{font-size:10px;color:var(--text3);font-family:var(--mono)}
+.sheet-delete{margin-left:auto;opacity:0;font-size:14px;color:var(--red);padding:2px 4px;border-radius:4px;background:none;border:none;cursor:pointer;transition:opacity .15s}
+.sheet-item:hover .sheet-delete{opacity:1}
+
+/* ── MAIN CONTENT ── */
+#content{flex:1;min-width:0;display:flex;flex-direction:column;gap:20px}
+
+/* ── KPI GRID ── */
+.kpi-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(175px,1fr));gap:12px}
+.kpi{background:var(--s1);border:1px solid var(--border);border-radius:12px;padding:16px 18px;position:relative;overflow:hidden;transition:border-color .2s}
+.kpi:hover{border-color:var(--border2)}
+.kpi-stripe{position:absolute;top:0;left:0;width:3px;height:100%;border-radius:12px 0 0 12px}
+.kpi-icon{font-size:18px;margin-bottom:8px}
+.kpi-label{font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:1px;margin-bottom:3px}
+.kpi-val{font-family:var(--mono);font-size:24px;font-weight:600;line-height:1}
+.kpi-sub{font-size:11px;color:var(--text3);margin-top:4px}
+
+/* ── SECTION CARD ── */
+.card{background:var(--s1);border:1px solid var(--border);border-radius:12px;padding:20px}
+.card-title{font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:1.5px;margin-bottom:16px}
+
+/* ── HBAR ── */
+.hbar-row{display:grid;grid-template-columns:140px 1fr 36px;align-items:center;gap:10px;margin-bottom:7px}
+.hbar-label{font-size:11px;color:var(--text2);text-align:right;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.hbar-track{height:18px;background:var(--s3);border-radius:4px;overflow:hidden}
+.hbar-fill{height:100%;border-radius:4px;transition:width .8s cubic-bezier(.22,1,.36,1)}
+.hbar-n{font-family:var(--mono);font-size:11px;color:var(--text);text-align:right}
+
+/* ── BADGE ── */
+.badge{display:inline-flex;align-items:center;gap:4px;padding:3px 9px;border-radius:20px;font-size:11px;font-weight:600;white-space:nowrap}
+.badge::before{content:'';width:5px;height:5px;border-radius:50%;background:currentColor;opacity:.7;flex-shrink:0}
+
+/* ── TABLE ── */
+.tbl-toolbar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:14px}
+.tbl-search{background:var(--s0);border:1px solid var(--border);color:var(--text);border-radius:8px;padding:7px 12px;font-size:12px;width:240px;outline:none;transition:border-color .15s}
+.tbl-search:focus{border-color:var(--shopee)}
+.tbl-select{background:var(--s0);border:1px solid var(--border);color:var(--text);border-radius:8px;padding:7px 12px;font-size:12px;outline:none;cursor:pointer}
+.tbl-count{font-size:11px;color:var(--text3);margin-left:auto;font-family:var(--mono)}
+.tbl-wrap{overflow-x:auto}
+table{width:100%;border-collapse:collapse;font-size:12px}
+thead th{padding:9px 10px;text-align:left;color:var(--text3);font-size:10px;text-transform:uppercase;letter-spacing:1px;border-bottom:1px solid var(--border);white-space:nowrap;font-weight:600}
+tbody tr{border-bottom:1px solid var(--border)11;transition:background .1s}
+tbody tr:hover{background:var(--s2)}
+tbody tr.done{opacity:.5}
+tbody tr.done td:nth-child(3){text-decoration:line-through;color:var(--text3)}
+tbody td{padding:9px 10px;vertical-align:middle}
+.td-check{width:36px;text-align:center}
+.td-id{font-family:var(--mono);font-size:11px;color:var(--blue)}
+.td-prod{max-width:190px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px}
+.td-val{font-family:var(--mono);font-size:12px;color:var(--green)}
+.td-muted{font-size:11px;color:var(--text2)}
+.td-date{font-family:var(--mono);font-size:11px;color:var(--text3)}
+
+/* Custom checkbox */
+.cb{width:17px;height:17px;border-radius:5px;border:1.5px solid var(--border2);background:var(--s2);cursor:pointer;appearance:none;-webkit-appearance:none;transition:all .15s;position:relative}
+.cb:checked{background:var(--green);border-color:var(--green)}
+.cb:checked::after{content:'✓';position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:#000}
+
+/* Status select inline */
+.st-sel{background:transparent;border:1px solid transparent;color:inherit;font-size:11px;font-weight:600;padding:3px 8px;border-radius:20px;cursor:pointer;outline:none;transition:all .15s;font-family:var(--font)}
+.st-sel:hover,.st-sel:focus{border-color:var(--border2);background:var(--s3)}
+
+/* ── PAGINATION ── */
+.pag{display:flex;align-items:center;gap:8px;margin-top:14px;justify-content:flex-end}
+.pag-btn{background:var(--s2);border:1px solid var(--border);color:var(--text);padding:4px 12px;border-radius:6px;font-size:14px}
+.pag-btn:disabled{opacity:.3;cursor:default}
+.pag-info{font-family:var(--mono);font-size:11px;color:var(--text3)}
+
+/* ── LOG ── */
+.log-entry{display:flex;align-items:flex-start;gap:12px;padding:10px 0;border-bottom:1px solid var(--border)22}
+.log-dot{width:8px;height:8px;border-radius:50%;margin-top:4px;flex-shrink:0}
+.log-time{font-family:var(--mono);font-size:10px;color:var(--text3);white-space:nowrap;margin-top:2px}
+.log-msg{font-size:12px;color:var(--text2);flex:1}
+.log-msg strong{color:var(--text);font-weight:600}
+
+/* ── MODAL ── */
+#modal-overlay{position:fixed;inset:0;background:#00000099;z-index:500;display:none;align-items:center;justify-content:center;backdrop-filter:blur(4px)}
+#modal-overlay.open{display:flex}
+.modal{background:var(--s1);border:1px solid var(--border2);border-radius:16px;padding:28px;width:520px;max-width:90vw;max-height:85vh;overflow-y:auto}
+.modal-title{font-size:16px;font-weight:700;margin-bottom:20px;display:flex;align-items:center;gap:10px}
+.modal-close{margin-left:auto;background:none;border:none;color:var(--text3);font-size:18px;cursor:pointer;padding:4px}
+.modal-close:hover{color:var(--text)}
+.field-label{font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:1px;margin-bottom:6px;display:block}
+.field-input{width:100%;background:var(--s0);border:1px solid var(--border);color:var(--text);border-radius:8px;padding:9px 12px;font-size:13px;outline:none;font-family:var(--font);transition:border-color .15s}
+.field-input:focus{border-color:var(--shopee)}
+.field-group{margin-bottom:16px}
+.detail-row{display:flex;gap:8px;margin-bottom:8px;font-size:12px}
+.detail-key{color:var(--text3);width:160px;flex-shrink:0}
+.detail-val{color:var(--text);flex:1;word-break:break-word}
+
+/* ── EMPTY ── */
+#empty{display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:65vh;gap:16px;text-align:center}
+#empty h2{font-size:22px;font-weight:700}
+#empty p{font-size:13px;color:var(--text3);max-width:380px;line-height:1.7}
+#empty-err{color:var(--red);background:#ff4d6d11;padding:10px 20px;border-radius:8px;border:1px solid #ff4d6d33;font-size:12px;display:none}
+
+/* ── TABS ── */
+.tabs{display:flex;gap:2px;border-bottom:1px solid var(--border);margin-bottom:20px}
+.tab{background:none;border:none;padding:10px 16px;font-size:12px;font-weight:600;color:var(--text3);border-bottom:2px solid transparent;margin-bottom:-1px;transition:color .15s;white-space:nowrap}
+.tab.active{color:var(--shopee);border-bottom-color:var(--shopee)}
+.tab:hover:not(.active){color:var(--text2)}
+
+/* ── CHART GRID ── */
+.chart-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.sol-cards{display:flex;gap:10px;margin-top:16px}
+.sol-card{flex:1;background:var(--s2);border-radius:10px;padding:14px;text-align:center;border:1px solid var(--border)}
+.sol-num{font-family:var(--mono);font-size:26px;font-weight:700}
+.sol-lbl{font-size:10px;color:var(--text3);margin-top:6px;line-height:1.4}
+.sol-pct{font-size:10px;color:var(--text3);margin-top:2px}
+
+.uf-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px}
+.uf-card{background:var(--s2);border:1px solid var(--border);border-radius:9px;padding:12px;text-align:center}
+.uf-card.top{border-color:#ff482066}
+.uf-top{font-size:9px;color:var(--shopee);font-weight:700;margin-bottom:4px}
+.uf-name{font-size:12px;font-weight:600}
+.uf-n{font-family:var(--mono);font-size:20px;font-weight:700;margin-top:4px}
+
+.status-cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:10px}
+.stcard{border-radius:10px;padding:14px 16px}
+.stcard-qty{font-family:var(--mono);font-size:22px;font-weight:700;margin-top:10px}
+.stcard-val{font-size:11px;color:var(--text3);margin-top:4px}
+
+/* ── ANIMATIONS ── */
+@keyframes up{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:none}}
+.anim{animation:up .4s ease both}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+.saving{animation:pulse .8s infinite}
+
+/* ── SAVE INDICATOR ── */
+#save-ind{font-size:11px;font-family:var(--mono);color:var(--text3);display:flex;align-items:center;gap:5px}
+#save-ind.saved{color:var(--green)}
+#save-dot{width:6px;height:6px;border-radius:50%;background:var(--text3)}
+#save-ind.saved #save-dot{background:var(--green)}
+/* ── MERGE BADGE ── */
+.merge-badge{display:inline-flex;align-items:center;gap:4px;padding:1px 7px;border-radius:10px;font-size:10px;font-weight:700;background:#4db8ff18;color:#4db8ff;border:1px solid #4db8ff30;font-family:var(--mono);flex-shrink:0}
+.sheet-merge-count{font-size:10px;color:var(--blue);font-family:var(--mono);margin-top:1px}
+/* MERGE MODAL */
+.merge-preview-row{display:flex;align-items:center;gap:10px;padding:8px 12px;border-radius:8px;background:var(--s2);margin-bottom:6px;font-size:12px}
+.merge-preview-icon{font-size:16px;flex-shrink:0}
+.merge-preview-info{flex:1;min-width:0}
+.merge-preview-name{font-weight:600;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.merge-preview-meta{font-size:11px;color:var(--text3);margin-top:2px;font-family:var(--mono)}
+.merge-tag{display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:10px;font-size:10px;font-weight:700}
+.merge-tag.new{background:#00e5a018;color:var(--green);border:1px solid #00e5a030}
+.merge-tag.dup{background:#ffc54018;color:var(--yellow);border:1px solid #ffc54030}
+
+/* ── PROGRESS BAR ── */
+#progress-wrap{background:var(--s1);border:1px solid var(--border);border-radius:14px;padding:20px 24px;margin-bottom:20px}
+#progress-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px}
+#progress-title{font-size:13px;font-weight:700;color:var(--text);display:flex;align-items:center;gap:8px}
+#progress-pct{font-family:var(--mono);font-size:28px;font-weight:700;color:var(--green)}
+#progress-sub{font-size:11px;color:var(--text3);margin-top:2px}
+#progress-track{height:14px;background:var(--s3);border-radius:99px;overflow:hidden;position:relative}
+#progress-fill{height:100%;border-radius:99px;background:linear-gradient(90deg,#00c896,#00e5a0);transition:width .7s cubic-bezier(.22,1,.36,1);position:relative}
+#progress-fill::after{content:'';position:absolute;inset:0;background:linear-gradient(90deg,transparent 0%,#ffffff22 50%,transparent 100%);animation:shimmerBar 2s infinite}
+@keyframes shimmerBar{0%{transform:translateX(-100%)}100%{transform:translateX(100%)}}
+#progress-segments{display:flex;gap:6px;margin-top:10px;flex-wrap:wrap}
+.prog-seg{display:flex;align-items:center;gap:5px;font-size:11px;font-weight:600;padding:3px 10px;border-radius:20px}
+.prog-dot{width:7px;height:7px;border-radius:50%;flex-shrink:0}
+
+/* ── FINALIZADOS VIEW ── */
+#view-finalizados .fin-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px}
+#view-finalizados .fin-title{font-size:16px;font-weight:700;display:flex;align-items:center;gap:8px}
+.fin-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:12px}
+.fin-card{background:var(--s1);border:1px solid #00e5a025;border-radius:12px;padding:16px;position:relative;overflow:hidden;transition:border-color .2s}
+.fin-card:hover{border-color:#00e5a055}
+.fin-card::before{content:'';position:absolute;top:0;left:0;width:3px;height:100%;background:var(--green);border-radius:12px 0 0 12px}
+.fin-card-id{font-family:var(--mono);font-size:11px;color:var(--blue);margin-bottom:6px;display:flex;align-items:center;gap:6px}
+.fin-card-prod{font-size:13px;font-weight:600;color:var(--text);margin-bottom:4px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.fin-card-meta{font-size:11px;color:var(--text3);display:flex;flex-wrap:wrap;gap:8px;margin-top:8px}
+.fin-card-val{font-family:var(--mono);font-size:13px;color:var(--green);font-weight:600}
+.fin-card-date{font-family:var(--mono);font-size:10px;color:var(--text3)}
+.fin-card-actions{display:flex;gap:6px;margin-top:10px;align-items:center}
+.fin-check{width:20px;height:20px;border-radius:50%;background:#00e5a0;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:#000;flex-shrink:0}
+.fin-empty{display:flex;flex-direction:column;align-items:center;justify-content:center;padding:60px 20px;text-align:center;color:var(--text3)}
+.fin-empty-icon{font-size:48px;margin-bottom:12px;opacity:.4}
+#fin-search{background:var(--s0);border:1px solid var(--border);color:var(--text);border-radius:8px;padding:7px 12px;font-size:12px;width:220px;outline:none;font-family:var(--font)}
+#fin-sort{background:var(--s0);border:1px solid var(--border);color:var(--text);border-radius:8px;padding:7px 12px;font-size:12px;outline:none;cursor:pointer;font-family:var(--font)}
+.fin-stats{display:flex;gap:10px;flex-wrap:wrap}
+.fin-stat{background:var(--s2);border:1px solid var(--border);border-radius:8px;padding:8px 14px;text-align:center;flex:1;min-width:80px}
+.fin-stat-val{font-family:var(--mono);font-size:18px;font-weight:700;color:var(--green)}
+.fin-stat-lbl{font-size:10px;color:var(--text3);margin-top:2px}
+.fin-note{font-size:11px;color:var(--text2);font-style:italic;margin-top:6px;padding:6px 8px;background:var(--s3);border-radius:6px}
+
+/* Status row colors */
+tbody tr.st-concluido td{background:#00e5a006}
+tbody tr.st-andamento td{background:#ff48200a}
+tbody tr.st-analise td{background:#4db8ff08}
+tbody tr.st-aguardando td{background:#ff954808}
+tbody tr.st-cancelado td{background:#4a557808}
+
+/* ── ABERTOS VIEW ── */
+.ab-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:12px}
+.ab-card{background:var(--s1);border-radius:12px;padding:16px;position:relative;overflow:hidden;transition:all .2s;cursor:default}
+.ab-card:hover{transform:translateY(-1px);box-shadow:0 4px 20px #0006}
+.ab-card::before{content:'';position:absolute;top:0;left:0;width:3px;height:100%;border-radius:12px 0 0 12px}
+.ab-card-id{font-family:var(--mono);font-size:11px;color:var(--blue);margin-bottom:6px;display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.ab-card-prod{font-size:13px;font-weight:600;color:var(--text);margin-bottom:4px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ab-card-meta{font-size:11px;color:var(--text3);display:flex;flex-wrap:wrap;gap:8px;margin-top:8px}
+.ab-card-val{font-family:var(--mono);font-size:13px;font-weight:600}
+.ab-card-actions{display:flex;gap:6px;margin-top:10px;align-items:center;flex-wrap:wrap}
+.ab-card-note{font-size:11px;color:var(--text2);font-style:italic;margin-top:6px;padding:6px 8px;background:var(--s3);border-radius:6px}
+.ab-filter-bar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:14px}
+.ab-status-pill{display:inline-flex;align-items:center;gap:5px;padding:5px 12px;border-radius:20px;font-size:11px;font-weight:700;cursor:pointer;border:1.5px solid transparent;transition:all .15s;white-space:nowrap}
+.ab-status-pill:hover{opacity:.85}
+.ab-status-pill.active{box-shadow:0 0 0 2px currentColor}
+.ab-empty{display:flex;flex-direction:column;align-items:center;justify-content:center;padding:60px 20px;text-align:center;color:var(--text3);grid-column:1/-1}
+.ab-empty-icon{font-size:52px;margin-bottom:12px}
+.ab-stats{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:16px}
+.ab-stat{background:var(--s2);border:1px solid var(--border);border-radius:8px;padding:8px 14px;text-align:center;flex:1;min-width:80px}
+.ab-stat-val{font-family:var(--mono);font-size:18px;font-weight:700}
+.ab-stat-lbl{font-size:10px;color:var(--text3);margin-top:2px}
+.ab-priority-high{border-color:#ff4d6d55;background:#ff4d6d05}
+.ab-priority-high::before{background:var(--red)}
+.ab-priority-med{border-color:#ffc54044;background:#ffc54005}
+.ab-priority-med::before{background:var(--yellow)}
+.ab-priority-low{border-color:#4a557866;background:#4a557805}
+.ab-priority-low::before{background:var(--gray)}
+.ab-priority-blue{border-color:#4db8ff44;background:#4db8ff05}
+.ab-priority-blue::before{background:var(--blue)}
+.ab-priority-purple{border-color:#b388ff44;background:#b388ff05}
+.ab-priority-purple::before{background:var(--purple)}
+.ab-urgent-dot{width:7px;height:7px;border-radius:50%;background:var(--red);animation:pulse 1.5s infinite;flex-shrink:0}
+@keyframes pulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.5;transform:scale(.85)}}
+
+/* ── VERSION BADGE ── */
+#ver-badge{font-family:var(--mono);font-size:10px;color:var(--text3);padding:2px 8px;border-radius:10px;border:1px solid var(--border);background:var(--s2);cursor:pointer;transition:all .15s;white-space:nowrap}
+#ver-badge:hover{border-color:var(--border2);color:var(--text)}
+#ver-badge.has-update{border-color:#ffc54066;color:var(--yellow);background:#ffc54010;animation:verPulse 2s infinite}
+@keyframes verPulse{0%,100%{box-shadow:0 0 0 0 #ffc54033}50%{box-shadow:0 0 0 5px #ffc54000}}
+
+/* ── UPDATE BANNER ── */
+#update-banner{background:linear-gradient(135deg,#1a1f2e,#1d2335);border:1px solid #ffc54044;border-radius:14px;padding:18px 22px;margin-bottom:20px;display:none;animation:up .4s ease}
+#update-banner.show{display:flex;align-items:center;gap:16px;flex-wrap:wrap}
+.upd-icon{font-size:28px;flex-shrink:0}
+.upd-body{flex:1;min-width:0}
+.upd-title{font-size:14px;font-weight:700;color:var(--yellow);margin-bottom:3px;display:flex;align-items:center;gap:8px}
+.upd-desc{font-size:12px;color:var(--text2);line-height:1.5}
+.upd-actions{display:flex;gap:8px;align-items:center;flex-shrink:0}
+.btn-update{background:linear-gradient(135deg,var(--yellow),#ffb020);color:#000;font-weight:700;border:none;padding:9px 18px;border-radius:9px;font-size:12px;cursor:pointer;transition:all .15s;white-space:nowrap;font-family:var(--font)}
+.btn-update:hover{opacity:.9;transform:translateY(-1px);box-shadow:0 4px 14px #ffc54044}
+.btn-dismiss{background:transparent;border:1px solid var(--border2);color:var(--text3);padding:9px 14px;border-radius:9px;font-size:12px;cursor:pointer;font-family:var(--font)}
+.btn-dismiss:hover{color:var(--text);background:var(--s2)}
+.upd-tag{display:inline-flex;align-items:center;gap:4px;padding:1px 7px;border-radius:10px;font-size:10px;font-weight:700;background:#ffc54018;color:var(--yellow);border:1px solid #ffc54030}
+
+/* ── UPDATE MODAL ── */
+.upd-changelog{display:flex;flex-direction:column;gap:8px;max-height:320px;overflow-y:auto;margin-bottom:20px}
+.upd-cl-item{display:flex;gap:10px;padding:10px 12px;background:var(--s2);border-radius:8px;font-size:12px}
+.upd-cl-icon{font-size:16px;flex-shrink:0}
+.upd-cl-text{color:var(--text2);line-height:1.5;flex:1}
+.upd-cl-text strong{color:var(--text)}
+.upd-progress-wrap{background:var(--s2);border-radius:8px;padding:12px 14px;margin-bottom:16px}
+.upd-progress-bar{height:6px;background:var(--s3);border-radius:3px;overflow:hidden;margin-top:8px}
+.upd-progress-fill{height:100%;background:linear-gradient(90deg,#ffc540,#00e5a0);border-radius:3px;transition:width .4s ease;width:0%}
+.upd-step{font-size:11px;color:var(--text3);font-family:var(--mono)}
+.upd-result{padding:12px 14px;border-radius:8px;font-size:12px;text-align:center;margin-top:8px}
+.upd-result.success{background:#00e5a010;border:1px solid #00e5a030;color:var(--green)}
+.upd-result.error{background:#ff4d6d10;border:1px solid #ff4d6d30;color:var(--red)}
+
+/* ── BACKUP INDICATOR ── */
+.backup-row{display:flex;align-items:center;gap:8px;padding:8px 12px;background:var(--s2);border-radius:8px;margin-bottom:8px;font-size:12px}
+.backup-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+
+/* ── FRETE INLINE ── */
+.frete-mini{display:inline-flex;align-items:center;gap:4px}
+.frete-toggle{background:none;border:1px solid var(--border);border-radius:6px;color:var(--text3);font-size:10px;padding:1px 6px;cursor:pointer;transition:all .12s;font-family:var(--font);white-space:nowrap}
+.frete-toggle.sim{background:#ff954818;border-color:#ff9548;color:#ff9548;font-weight:700}
+.frete-toggle.nao{background:var(--s3);color:var(--text3)}
+.frete-input-inline{background:var(--s2);border:1px solid var(--border);color:var(--text);border-radius:5px;padding:1px 6px;font-size:11px;width:76px;outline:none;font-family:var(--mono)}
+.frete-input-inline:focus{border-color:#ff9548}
+
+/* ── GLOBAL SEARCH ── */
+#global-search-wrap{position:relative}
+#global-search{background:var(--s1);border:1px solid var(--border);color:var(--text);border-radius:8px;padding:6px 11px 6px 30px;font-size:12px;width:190px;outline:none;transition:border-color .15s,width .2s}
+#global-search:focus{border-color:var(--shopee);width:240px}
+#global-search-wrap::before{content:'🔍';position:absolute;left:9px;top:50%;transform:translateY(-50%);font-size:11px;pointer-events:none}
+#global-results{position:absolute;top:calc(100% + 5px);left:0;right:0;background:var(--s1);border:1px solid var(--border2);border-radius:10px;max-height:300px;overflow-y:auto;z-index:300;display:none;box-shadow:0 8px 30px #0008;min-width:320px}
+#global-results.open{display:block}
+.gr-item{display:flex;align-items:center;gap:9px;padding:8px 12px;cursor:pointer;font-size:12px;border-bottom:1px solid var(--border)22;transition:background .1s}
+.gr-item:hover{background:var(--s2)}
+.gr-item:last-child{border:none}
+.gr-id{font-family:var(--mono);font-size:10px;color:var(--blue);flex-shrink:0}
+.gr-prod{color:var(--text);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
+/* ── BULK ACTION BAR ── */
+#bulk-bar{background:var(--s2);border:1px solid var(--border2);border-radius:10px;padding:9px 14px;display:none;align-items:center;gap:9px;margin-bottom:11px;flex-wrap:wrap}
+#bulk-bar.show{display:flex}
+#bulk-count{font-family:var(--mono);font-size:12px;color:var(--yellow);font-weight:700}
+.bulk-sep{width:1px;height:17px;background:var(--border2)}
+
+/* ── FRETE DETAIL SECTION ── */
+.frete-section{background:var(--s2);border:1px solid var(--border);border-radius:10px;padding:14px;margin-bottom:14px}
+.frete-section-title{font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:1px;margin-bottom:10px}
+.frete-radio-group{display:flex;gap:8px;margin-bottom:10px}
+.frete-radio{flex:1;padding:8px 12px;border-radius:8px;border:1.5px solid var(--border);background:var(--s3);cursor:pointer;text-align:center;font-size:12px;font-weight:600;color:var(--text2);transition:all .15s}
+.frete-radio.active-sim{border-color:#ff9548;background:#ff954815;color:#ff9548}
+.frete-radio.active-nao{border-color:var(--green);background:#00e5a010;color:var(--green)}
+.card-frete-badge{font-size:10px;font-weight:700;padding:1px 7px;border-radius:10px;background:#ff954818;color:#ff9548;border:1px solid #ff954830}
+
+/* ── CONCLUSÃO TAG ── */
+.fin-tipo{display:inline-flex;align-items:center;gap:4px;padding:3px 10px;border-radius:20px;font-size:11px;font-weight:700;white-space:nowrap;margin-bottom:8px}
+
+/* ── DAYS BADGE ── */
+.days-badge{display:inline-flex;align-items:center;gap:3px;padding:1px 7px;border-radius:10px;font-size:10px;font-weight:700;font-family:var(--mono)}
+.days-ok{background:#00e5a015;color:var(--green);border:1px solid #00e5a030}
+.days-warn{background:#ffc54015;color:var(--yellow);border:1px solid #ffc54030}
+.days-danger{background:#ff4d6d15;color:var(--red);border:1px solid #ff4d6d30;animation:pulse3 1.5s infinite}
+
+/* ── META GOAL ── */
+.goal-wrap{background:var(--s1);border:1px solid var(--border);border-radius:12px;padding:16px 20px;margin-bottom:16px}
+.goal-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}
+.goal-title{font-size:12px;font-weight:700;color:var(--text2);display:flex;align-items:center;gap:7px}
+.goal-pct{font-family:var(--mono);font-size:20px;font-weight:700}
+.goal-track{height:8px;background:var(--s3);border-radius:99px;overflow:hidden}
+.goal-fill{height:100%;border-radius:99px;transition:width .7s cubic-bezier(.22,1,.36,1)}
+
+/* ── COMPARE VIEW ── */
+#view-compare .cmp-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:14px}
+.cmp-card{background:var(--s1);border:1px solid var(--border);border-radius:12px;padding:18px}
+.cmp-title{font-size:12px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:1px;margin-bottom:14px;display:flex;align-items:center;gap:7px}
+.cmp-row{display:flex;align-items:center;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border)22;font-size:12px}
+.cmp-row:last-child{border:none}
+.cmp-label{color:var(--text3)}
+.cmp-val{font-family:var(--mono);font-weight:600}
+.cmp-diff-pos{color:var(--green);font-size:10px;font-family:var(--mono)}
+.cmp-diff-neg{color:var(--red);font-size:10px;font-family:var(--mono)}
+
+/* ── TOP PRODUCTS ── */
+#view-produtos .prod-row{display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid var(--border)22}
+#view-produtos .prod-row:last-child{border:none}
+.prod-rank{font-family:var(--mono);font-size:11px;color:var(--text3);width:24px;text-align:center;flex-shrink:0}
+.prod-name{font-size:13px;font-weight:500;color:var(--text);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.prod-count{font-family:var(--mono);font-size:13px;font-weight:700;color:var(--shopee);flex-shrink:0}
+.prod-bar-wrap{width:80px;height:6px;background:var(--s3);border-radius:3px;overflow:hidden;flex-shrink:0}
+.prod-bar{height:100%;background:var(--shopee);border-radius:3px;transition:width .8s ease}
+
+/* ── DATE FILTER PERIOD ── */
+.period-bar{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px;align-items:center}
+.period-btn{padding:4px 12px;border-radius:20px;font-size:11px;font-weight:600;border:1px solid var(--border);background:var(--s2);color:var(--text2);cursor:pointer;transition:all .15s}
+.period-btn.active{background:var(--shopee)18;border-color:var(--shopee);color:var(--shopee)}
+
+/* ── KEYBOARD HINT ── */
+.kbd{display:inline-flex;align-items:center;justify-content:center;padding:1px 6px;border-radius:4px;font-family:var(--mono);font-size:10px;background:var(--s3);border:1px solid var(--border2);color:var(--text3)}
+
+/* ── UPDATE CHECK BUTTON ── */
+#btn-check-update{background:transparent;border:1px solid var(--border2);color:var(--text3);
+  padding:5px 11px;border-radius:8px;font-size:11px;font-weight:600;cursor:pointer;
+  font-family:var(--font);transition:all .15s;display:flex;align-items:center;gap:5px}
+#btn-check-update:hover{border-color:var(--yellow);color:var(--yellow);background:#ffc54010}
+#btn-check-update.checking{animation:pulse2 .8s infinite;pointer-events:none}
+#btn-check-update.has-update{border-color:var(--yellow);color:var(--yellow);background:#ffc54015}
+
+/* ── RENAME SHEET ── */
+.sheet-rename{opacity:0;font-size:12px;color:var(--text3);padding:2px 4px;border-radius:4px;background:none;border:none;cursor:pointer;transition:opacity .15s;flex-shrink:0}
+.sheet-item:hover .sheet-rename{opacity:1}
+.sheet-rename:hover{color:var(--blue)}
+.rename-input{background:var(--s0);border:1px solid var(--shopee);color:var(--text);border-radius:6px;padding:3px 8px;font-size:11px;font-family:var(--font);outline:none;width:100%}
+</style>
+</head>
+<body>
+<div id="app">
+
+<!-- TOAST -->
+<div id="toast"></div>
+
+<!-- MODAL OVERLAY -->
+<div id="modal-overlay">
+  <div class="modal" id="modal-content"></div>
+</div>
+
+<!-- HEADER -->
+<div id="hdr">
+  <div id="hdr-inner">
+    <div class="logo">
+      <div class="logo-icon">📦</div>
+      <div>
+        <div class="logo-text">DEVOLUÇÕES <span>SHOPEE</span></div>
+        <div id="hdr-meta">nenhuma planilha ativa</div>
+      </div>
+    </div>
+    <div class="hdr-gap"></div>
+    <div class="hdr-actions">
+      <div id="save-ind"><div id="save-dot"></div><span id="save-txt">sem dados</span></div>
+      <div id="global-search-wrap">
+        <input id="global-search" placeholder="Busca global…" oninput="globalSearch(this.value)" onfocus="globalSearch(this.value)" autocomplete="off"/>
+        <div id="global-results"></div>
+      </div>
+      <button id="btn-check-update" onclick="checkForUpdates()" title="Verificar atualizações">🔄 Atualizar App</button>
+      <span id="ver-badge" onclick="openVersionInfo()" title="Clique para ver informações de versão">v3.0.0</span>
+      <label id="upload-label" for="file-input">
+        <input type="file" id="file-input" accept=".xlsx,.xls"/>
+        <span>➕</span> Nova Planilha
+      </label>
+      <input type="file" id="merge-file-input" accept=".xlsx,.xls" style="display:none"/>
+      <button class="btn btn-ghost" id="btn-merge" style="display:none" onclick="document.getElementById('merge-file-input').click()">🔗 Anexar Pedidos</button>
+      <button class="btn btn-ghost" id="btn-export" style="display:none" onclick="exportXLSX()">⬇ Exportar</button>
+      <button class="btn btn-ghost" id="btn-log" style="display:none" onclick="openLog()">📋 Histórico</button>
+    </div>
+  </div>
+</div>
+
+<!-- LAYOUT -->
+<div id="layout">
+  <!-- SIDEBAR -->
+  <div id="sidebar">
+    <div class="nav-section">Menu</div>
+    <button class="nav-btn active" data-view="overview" onclick="switchView('overview',this)"><span class="nb-icon">📊</span>Visão Geral</button>
+    <button class="nav-btn" data-view="status" onclick="switchView('status',this)"><span class="nb-icon">📋</span>Status & Motivos</button>
+    <button class="nav-btn" data-view="regioes" onclick="switchView('regioes',this)"><span class="nb-icon">🗺️</span>Regiões</button>
+    <button class="nav-btn" data-view="tabela" onclick="switchView('tabela',this)"><span class="nb-icon">📦</span>Registros <span class="nb-badge" id="nb-total" style="display:none"></span></button>
+    <button class="nav-btn" data-view="abertos" onclick="switchView('abertos',this)"><span class="nb-icon">🔓</span>Em Aberto <span class="nb-badge" id="nb-abertos" style="display:none;background:var(--yellow);color:#000"></span></button>
+        <button class="nav-btn" data-view="finalizados" onclick="switchView('finalizados',this)"><span class="nb-icon">✅</span>Finalizados <span class="nb-badge" id="nb-finalizados" style="display:none;background:var(--green)"></span></button>
+
+    <div class="nav-section" style="margin-top:20px">Planilhas Salvas</div>
+    <div id="sheets-list"></div>
+    <div id="no-sheets" style="font-size:11px;color:var(--text3);padding:8px 12px">Nenhuma planilha salva</div>
+  </div>
+
+  <!-- CONTENT -->
+  <div id="content">
+    <!-- EMPTY -->
+    <div id="empty">
+      <div style="font-size:68px;filter:drop-shadow(0 0 30px #ff482033)">📦</div>
+      <h2>Bem-vindo ao Dashboard</h2>
+      <p>Faça o upload de um relatório de devoluções exportado da Shopee (<span style="font-family:var(--mono);color:var(--shopee)">.xlsx</span>) ou selecione uma planilha salva no menu lateral.</p>
+      <div id="empty-err"></div>
+    </div>
+
+    <!-- DASHBOARD (hidden) -->
+    <div id="dashboard" style="display:none">
+
+      <!-- UPDATE BANNER -->
+      <div id="update-banner">
+        <div class="upd-icon">🚀</div>
+        <div class="upd-body">
+          <div class="upd-title">✨ Nova versão disponível <span class="upd-tag" id="upd-new-ver">v3.0.0</span></div>
+          <div class="upd-desc" id="upd-desc">Uma atualização com novos recursos está disponível. Todos os seus dados, pedidos e configurações serão preservados.</div>
+        </div>
+        <div class="upd-actions">
+          <button class="btn-update" onclick="startUpdate()">⬆ Atualizar Dashboard</button>
+          <button class="btn-dismiss" onclick="dismissUpdate()">Depois</button>
+        </div>
+      </div>
+
+      <!-- PROGRESS BAR (always visible) -->
+      <div id="progress-wrap" style="display:none">
+        <div id="progress-header">
+          <div>
+            <div id="progress-title">🎯 Progresso de Conclusão</div>
+            <div id="progress-sub">0 de 0 pedidos concluídos</div>
+          </div>
+          <div style="text-align:right">
+            <div id="progress-pct">0%</div>
+          </div>
+        </div>
+        <div id="progress-track"><div id="progress-fill" style="width:0%"></div></div>
+        <div id="progress-segments"></div>
+      </div>
+
+      <!-- VIEW: OVERVIEW -->
+      <div id="view-overview" class="view">
+        <div class="kpi-grid" id="kpi-grid"></div>
+        <div class="chart-grid" style="margin-top:16px">
+          <div class="card"><div class="card-title">Top Motivos</div><div id="ch-motivos"></div></div>
+          <div class="card"><div class="card-title">Solução Solicitada</div><div id="ch-solucao"></div><div class="sol-cards" id="sol-cards"></div></div>
+        </div>
+        <div class="chart-grid" style="margin-top:16px">
+          <div class="card"><div class="card-title">🚚 Frete de Devolução — Pedidos</div><div id="ch-frete"></div></div>
+          <div class="card"><div class="card-title">💰 Custo Total de Frete</div><div id="ch-frete-val" style="text-align:center;padding:8px 0"></div></div>
+        </div>
+      </div>
+
+      <!-- VIEW: STATUS -->
+      <div id="view-status" class="view" style="display:none">
+        <div class="chart-grid">
+          <div class="card"><div class="card-title">Status das Devoluções</div><div id="ch-status"></div></div>
+          <div class="card"><div class="card-title">Motivos</div><div id="ch-motivos2"></div></div>
+        </div>
+        <div class="card" style="margin-top:16px"><div class="card-title">Detalhe por Status</div><div class="status-cards" id="status-cards"></div></div>
+      </div>
+
+      <!-- VIEW: REGIOES -->
+      <div id="view-regioes" class="view" style="display:none">
+        <div class="chart-grid">
+          <div class="card"><div class="card-title">Por Estado (UF)</div><div id="ch-uf"></div></div>
+          <div class="card"><div class="card-title">Ranking de Estados</div><div class="uf-grid" id="uf-grid"></div></div>
+        </div>
+        <div class="card" style="margin-top:16px"><div class="card-title">Top Cidades</div><div id="ch-cidades"></div></div>
+      </div>
+
+      <!-- VIEW: TABELA -->
+      <div id="view-tabela" class="view" style="display:none">
+        <div class="card">
+     <!-- Bulk action bar -->
+          <div id="bulk-bar">
+            <span id="bulk-count">0 selecionados</span>
+            <div class="bulk-sep"></div>
+            <button class="btn btn-green btn-sm" onclick="bulkConclude()">✓ Concluir todos</button>
+            <button class="btn btn-ghost btn-sm" onclick="bulkSetStatus()">📋 Status em lote</button>
+            <button class="btn btn-ghost btn-sm" onclick="bulkClearSelection()">✕ Limpar</button>
+          </div>
+          <div class="tbl-toolbar">
+            <input class="tbl-search" id="tbl-search" placeholder="Buscar ID, produto, comprador, cidade…" oninput="applyFilters()"/>
+            <select class="tbl-select" id="flt-status" onchange="applyFilters()"><option value="">Todos os status</option></select>
+            <select class="tbl-select" id="flt-motivo" onchange="applyFilters()"><option value="">Todos os motivos</option></select>
+            <select class="tbl-select" id="flt-conf" onchange="applyFilters()">
+              <option value="">Todos</option>
+              <option value="0">Pendentes</option>
+              <option value="1">Conferidos</option>
+            </select>
+            <select class="tbl-select" id="flt-origem" onchange="applyFilters()">
+              <option value="">Todas as origens</option>
+              <option value="original">Original</option>
+              <option value="anexado">Anexados</option>
+            </select>
+            <select class="tbl-select" id="flt-frete" onchange="applyFilters()">
+              <option value="">Frete: todos</option><option value="sim">Com frete</option><option value="nao">Sem frete</option>
+            </select>
+            <span class="tbl-count" id="tbl-count"></span>
+            <button class="btn btn-ghost btn-sm" onclick="markAllVisible()">✓ Conferir visíveis</button>
+          </div>
+          <!-- Top pagination bar -->
+          <div class="pag" id="pag-top" style="margin-bottom:10px;display:none">
+            <span class="tbl-count" id="pg-count-top"></span>
+            <button class="pag-btn" id="pg-prev-top" onclick="changePage(-1)">‹</button>
+            <span class="pag-info" id="pg-info-top"></span>
+            <button class="pag-btn" id="pg-next-top" onclick="changePage(1)">›</button>
+          </div>
+          <div class="tbl-wrap">
+            <table>
+              <thead><tr>
+                <th class="td-check"><input type="checkbox" class="cb" id="cb-all" onchange="toggleAll(this)"/></th>
+                <th>ID</th><th>Produto</th><th>Status Shopee</th><th>Meu Status</th>
+                <th>Motivo</th><th>Reembolso</th><th>🚚 Frete</th><th>Cidade/UF</th><th>Data</th><th></th>
+              </tr></thead>
+              <tbody id="tbl-body"></tbody>
+            </table>
+          </div>
+          <div class="pag">
+            <span class="tbl-count" id="pg-count"></span>
+            <button class="pag-btn" id="pg-prev" onclick="changePage(-1)">‹</button>
+            <span class="pag-info" id="pg-info"></span>
+            <button class="pag-btn" id="pg-next" onclick="changePage(1)">›</button>
+          </div>
+        </div>
+      </div>
+
+
+      <!-- VIEW: ABERTOS -->
+      <div id="view-abertos" class="view" style="display:none">
+        <!-- Header -->
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:10px">
+          <div style="display:flex;align-items:center;gap:10px">
+            <div style="font-size:16px;font-weight:700;display:flex;align-items:center;gap:8px">
+              🔓 Pedidos em Aberto
+              <span id="ab-total-badge" style="font-family:var(--mono);font-size:13px;color:var(--yellow);font-weight:400"></span>
+            </div>
+          </div>
+          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+            <input id="ab-search" style="background:var(--s0);border:1px solid var(--border);color:var(--text);border-radius:8px;padding:7px 12px;font-size:12px;width:220px;outline:none;font-family:var(--font)" placeholder="Buscar ID, produto, comprador…" oninput="renderAbertos()"/>
+            <select id="ab-sort" style="background:var(--s0);border:1px solid var(--border);color:var(--text);border-radius:8px;padding:7px 12px;font-size:12px;outline:none;cursor:pointer;font-family:var(--font)" onchange="renderAbertos()">
+              <option value="prioridade">Por prioridade</option>
+              <option value="recente">Mais recentes</option>
+              <option value="antigo">Mais antigos</option>
+              <option value="valor">Maior reembolso</option>
+            </select>
+            <button class="btn btn-ghost btn-sm" onclick="exportAbertos()">⬇ Exportar em aberto</button>
+          </div>
+        </div>
+        <!-- Stats -->
+        <div id="ab-stats-row" class="ab-stats"></div>
+        <!-- Status pills filter -->
+        <div class="ab-filter-bar" id="ab-pills">
+          <span style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:1px">Filtrar:</span>
+        </div>
+        <!-- Grid -->
+        <div id="ab-grid" class="ab-grid"></div>
+        <div id="ab-pagination" class="pag" style="margin-top:16px"></div>
+      </div>
+      <!-- VIEW: FINALIZADOS -->
+      <div id="view-finalizados" class="view" style="display:none">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:10px">
+          <div class="fin-title">✅ Pedidos Finalizados <span id="fin-total-badge" style="font-family:var(--mono);font-size:13px;color:var(--green);font-weight:400"></span></div>
+          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+            <input id="fin-search" placeholder="Buscar…" oninput="renderFinalizados()"/>
+            <select id="fin-tipo-filter" class="tbl-select" onchange="renderFinalizados()">
+              <option value="">Todos os tipos</option>
+              <option value="Concluído">✅ Concluído</option>
+              <option value="Reembolsado">💰 Reembolsado</option>
+              <option value="Frete de Devolução">🚚 Frete de Devolução</option>
+              <option value="Disputa Perdida">⚖️ Disputa Perdida</option>
+              <option value="Voltou OK">📦 Voltou OK</option>
+              <option value="Cancelado — Voltou OK">↩️ Cancelado — Voltou OK</option>
+            </select>
+            <select id="fin-sort" onchange="renderFinalizados()">
+              <option value="recente">Mais recentes primeiro</option>
+              <option value="antigo">Mais antigos primeiro</option>
+              <option value="valor">Maior reembolso</option>
+              <option value="nome">Nome do produto</option>
+            </select>
+            <button class="btn btn-ghost btn-sm" onclick="exportFinalizados()">⬇ Exportar finalizados</button>
+          </div>
+        </div>
+        <div id="fin-stats-row" class="fin-stats" style="margin-bottom:16px"></div>
+        <div id="fin-grid" class="fin-grid"></div>
+        <div id="fin-pagination" class="pag" style="margin-top:16px"></div>
+      </div>
+    </div>
+  </div>
+</div>
+</div>
+
+<script>
+// ══════════════════════════════════════════════════════
+// CONSTANTS & STATE
+// ══════════════════════════════════════════════════════
+const C = {
+  shopee:"#ff4820",green:"#00e5a0",yellow:"#ffc540",
+  red:"#ff4d6d",blue:"#4db8ff",purple:"#b388ff",gray:"#4a5578"
+};
+const STATUS_OPTIONS = ["Pendente","Em Análise","Em Andamento","Aguardando Retorno","Reembolsado","Disputar","Concluído","Disputa Perdida","Cancelado"];
+const STATUS_COLORS = {
+  "Pendente":C.yellow,"Em Análise":C.blue,"Em Andamento":C.shopee,
+  "Aguardando Retorno":"#ff9548","Reembolsado":C.green,"Disputar":"#ff6b9d","Concluído":C.green,"Disputa Perdida":C.red,"Cancelado":C.gray
+};
+
+let ALL_ROWS = [];    // dados originais da planilha ativa
+let META = {};        // {[id]: {myStatus, done, note}} — metadados editáveis
+let FILTERED = [];    // rows filtradas
+let PAGE = 0;
+const PER = 20;
+let ACTIVE_SHEET_ID = null;
+let SAVE_TIMER = null;
+let LOG = [];         // [{ts, msg, color}
+let PENDING_MERGE = null; // staging for merge confirmation]
+
+// ══════════════════════════════════════════════════════
+// LOCAL STORAGE HELPERS
+// ══════════════════════════════════════════════════════
+// ══════════════════════════════════════════════════════
+// SUPABASE CONFIG — Direct REST API (no SDK)
+// ══════════════════════════════════════════════════════
+const SUPA_URL = "https://lhlbeyhrzmprmmzryjvy.supabase.co";
+const SUPA_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxobGJleWhyem1wcm1tenJ5anZ5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzgyNDEwMzMsImV4cCI6MjA5MzgxNzAzM30.3ScH-c0YMBsMnKqllcUm-Ovg5no7gWH9VbZni7DFAt4";
+const SUPA_HEADERS = {
+  "Content-Type": "application/json",
+  "apikey": SUPA_KEY,
+  "Authorization": "Bearer " + SUPA_KEY,
+  "Prefer": "return=representation"
+};
+
+async function supaFetch(path, method="GET", body=null, extra={}){
+  const opts = { method, headers: {...SUPA_HEADERS, ...extra} };
+  if(body) opts.body = JSON.stringify(body);
+  const res = await fetch(SUPA_URL + "/rest/v1/" + path, opts);
+  const text = await res.text();
+  let json = null;
+  try { json = text ? JSON.parse(text) : null; } catch(_) {}
+  if(!res.ok){
+    const msg = json?.message || json?.details || json?.hint || text || res.statusText;
+    throw new Error(msg);
+  }
+  return json;
+}
+
+function safeErr(e){
+  try{
+    if(!e) return "Erro desconhecido";
+    if(typeof e === "string") return e;
+    if(e instanceof Error) return e.message || String(e);
+    const msg = e.message || e.details || e.hint || e.error_description || e.code;
+    if(msg && typeof msg === "string") return msg;
+    try{ return JSON.stringify(e).slice(0,200); }catch(_){ return "Erro interno"; }
+  }catch(_){ return "Erro ao processar mensagem"; }
+}
+function getStorageUsageMB(){ return "Supabase ∞"; }
+function getStorageCapacity(){ return {usage:"Supabase", pct:"0", unlimited:true}; }
+function handleStorageError(e){ console.warn("[storage]", safeErr(e)); }
+
+// ── In-memory cache ──
+let _sheetsCache = null;
+let _metaCache = {};
+let _logCache = {};
+
+const DB = {
+  async getSheets(){
+    if(_sheetsCache) return _sheetsCache;
+    try{
+      const data = await supaFetch("sheets?select=id,name,date,count,merge_count,created_at&order=created_at.desc");
+      _sheetsCache = (data||[]).map(r => ({...r, data:null, mergeCount:r.merge_count||0}));
+      return _sheetsCache;
+    }catch(e){
+      const msg = safeErr(e);
+      console.warn("[getSheets]", msg);
+      toast("Erro ao carregar planilhas: " + msg, "err", 8000);
+      return [];
+    }
+  },
+  async saveSheet(s){
+    try{
+      const row = {id:s.id, name:s.name, date:s.date, count:s.count, merge_count:s.mergeCount||0, data:s.data};
+      await supaFetch("sheets?on_conflict=id", "POST", row, {"Prefer":"resolution=merge-duplicates,return=representation"});
+      if(_sheetsCache){ const i=_sheetsCache.findIndex(x=>x.id===s.id); if(i>=0) _sheetsCache[i]={..._sheetsCache[i],...s}; else _sheetsCache.unshift(s); }
+      return true;
+    }catch(e){ console.warn("[saveSheet]", safeErr(e)); toast("Erro ao salvar: "+safeErr(e),"err"); return false; }
+  },
+  async deleteSheet(id){
+    try{
+      await supaFetch("sheets?id=eq."+id, "DELETE");
+      if(_sheetsCache) _sheetsCache = _sheetsCache.filter(s=>s.id!==id);
+      delete _metaCache[id]; delete _logCache[id];
+      return true;
+    }catch(e){ console.warn("[deleteSheet]", safeErr(e)); return false; }
+  },
+  async getMeta(id){
+    if(_metaCache[id]) return _metaCache[id];
+    try{
+      const data = await supaFetch("sheet_meta?sheet_id=eq."+id+"&select=meta");
+      _metaCache[id] = data?.[0]?.meta || {};
+      return _metaCache[id];
+    }catch(e){ return {}; }
+  },
+  async saveMeta(id, meta){
+    _metaCache[id] = meta;
+    try{
+      await supaFetch("sheet_meta?on_conflict=sheet_id", "POST", {sheet_id:id, meta, updated_at:new Date().toISOString()}, {"Prefer":"resolution=merge-duplicates,return=representation"});
+      return true;
+    }catch(e){ console.warn("[saveMeta]", safeErr(e)); toast("Erro ao salvar: "+safeErr(e),"err"); return false; }
+  },
+  async getLog(id){
+    if(_logCache[id]) return _logCache[id];
+    try{
+      const data = await supaFetch("sheet_log?sheet_id=eq."+id+"&select=entry,created_at&order=created_at.desc&limit=100");
+      _logCache[id] = (data||[]).map(r=>r.entry);
+      return _logCache[id];
+    }catch(e){ return []; }
+  },
+  async saveLog(id, entries){
+    _logCache[id] = entries;
+    if(!entries||!entries[0]) return;
+    try{ await supaFetch("sheet_log", "POST", {sheet_id:id, entry:entries[0]}); }catch(_){}
+  },
+};
+
+// ── Sync LS wrapper (reads from cache, writes async) ──
+// Used by existing code that expects synchronous behavior
+const LS = {
+  getSheets: () => _sheetsCache || [],
+  saveSheets: d => { _sheetsCache=d; /* async write handled individually */ },
+  getMeta: id => _metaCache[id] || {},
+  saveMeta: (id,d) => { _metaCache[id]=d; DB.saveMeta(id,d); },
+  getLog: id => _logCache[id] || [],
+  saveLog: (id,d) => { _logCache[id]=d; DB.saveLog(id,d.slice(0,1)); },
+};
+
+// ── Storage usage (Supabase, not localStorage) ──
+function getStorageUsageMB(){ return "Supabase ∞"; }
+function getStorageCapacity(){ return {usage:"Supabase", pct:"0", unlimited:true}; }
+function handleStorageError(e){ console.warn("[error]", safeErr(e)); }
+function handleStorageError(e){ if(e&&(e.name==="QuotaExceededError"||safeErr(e).includes("quota"))){ setSaveInd("error"); toast("⚠️ Armazenamento cheio! Exporte e limpe planilhas antigas.","warn",8000); } }
+function getStorageUsageMB(){ let t=0; for(let k in localStorage){ if(localStorage.hasOwnProperty(k)) t+=((localStorage[k].length+k.length)*2); } return(t/1024/1024).toFixed(2); }
+function getStorageCapacity(){ const usage=parseFloat(getStorageUsageMB()); const pct=((usage/5)*100).toFixed(1); return{usage,pct}; }
+
+// ══════════════════════════════════════════════════════
+// UTILS
+// ══════════════════════════════════════════════════════
+const parseBRL = v => !v ? 0 : parseFloat(String(v).replace(/[R$\s.]/g,"").replace(",","."))||0;
+const fmt = n => new Intl.NumberFormat("pt-BR",{style:"currency",currency:"BRL"}).format(n||0);
+const fmtDate = v => {
+  if(!v) return "—";
+  const s=String(v).slice(0,10);
+  if(s.match(/^\d{4}-\d{2}-\d{2}$/)){const[y,m,d]=s.split("-");return`${d}/${m}/${y}`;}
+  return s;
+};
+const statusColor = s => {
+  const l=(s||"").toLowerCase();
+  if(l==="aprovada"||l==="disputa aprovada") return C.green;
+  if(l.includes("cancelada")) return C.gray;
+  if(l.includes("disputa rejeitada")) return C.red;
+  if(l.includes("disputa")||l.includes("análise")) return C.yellow;
+  if(l.includes("devolução")||l.includes("pendente")||l.includes("retornado")||l.includes("coleta")) return C.blue;
+  return C.gray;
+};
+const shortMotivo = m => {
+  const map=[["produto(s) errado(s)","Produto errado"],["mudei de ideia","Arrependimento"],
+    ["other types of damage","Avaria"],["não recebeu o pedido","Não recebido"],
+    ["defeito funcional","Defeito funcional"],["itens faltando","Itens faltando"],
+    ["outer packaging","Embalagem danificada"]];
+  const l=(m||"").toLowerCase();
+  for(const[k,v]of map) if(l.includes(k)) return v;
+  return m.length>30?m.slice(0,28)+"…":m;
+};
+const badge = (label, color, dot=true) =>
+  `<span class="badge" style="background:${color}18;color:${color};border:1px solid ${color}30${dot?'':''}">
+    ${dot?`<span style="width:5px;height:5px;border-radius:50%;background:${color};display:inline-block;margin-right:4px"></span>`:""}${label}</span>`;
+const rowId = r => { const id=r["ID da Devolução"]||r["ID do pedido"]||r["ID do Pedido"]||r["Nº do pedido"]||r["Número do Pedido"]||""; if(id) return String(id).trim(); const sig=[r["Nome do Produto"]||"",r["Data de criação do pedido"]||"",r["Nome de usuário (Comprador)"]||"",r["Quantia total de reembolsos"]||""].join("|"); let hash=5381; for(let i=0;i<sig.length;i++) hash=((hash<<5)+hash)+sig.charCodeAt(i); return"auto_"+Math.abs(hash).toString(36); };
+
+// ══════════════════════════════════════════════════════
+// TOAST
+// ══════════════════════════════════════════════════════
+function toast(msg, type="success", dur=3000){
+  const el=document.createElement("div");
+  el.className=`toast-item ${type}`;
+  const icons={success:"✅",info:"ℹ️",warn:"⚠️"};
+  el.innerHTML=`<span>${icons[type]||"ℹ️"}</span><span>${msg}</span>`;
+  document.getElementById("toast").appendChild(el);
+  setTimeout(()=>{el.style.animation="slideOut .3s ease forwards";setTimeout(()=>el.remove(),300)},dur);
+}
+
+// ══════════════════════════════════════════════════════
+// SAVE INDICATOR
+// ══════════════════════════════════════════════════════
+function setSaveInd(state){
+  const ind=document.getElementById("save-ind"),txt=document.getElementById("save-txt"),dot=document.getElementById("save-dot");
+  ind.className="";
+  if(state==="saving"){txt.textContent="Salvando…";dot.style.background=C.yellow;}
+  else if(state==="saved"){ind.className="saved";txt.textContent="Salvo";dot.style.background=C.green;}
+  else if(state==="error"){ind.style.color=C.red;txt.textContent="Erro ao salvar!";dot.style.background=C.red;}
+  else{txt.textContent="sem dados";dot.style.background="var(--text3)";}
+}
+
+// ══════════════════════════════════════════════════════
+// LOG
+// ══════════════════════════════════════════════════════
+function addLog(msg, color=C.blue){
+  const entry={ts:new Date().toISOString(),msg,color};
+  LOG.unshift(entry);
+  if(ACTIVE_SHEET_ID) LS.saveLog(ACTIVE_SHEET_ID, LOG.slice(0,200));
+}
+function openLog(){
+  const entries = LOG.slice(0,100);
+  document.getElementById("modal-content").innerHTML=`
+    <div class="modal-title">📋 Histórico de Alterações <button class="modal-close" onclick="closeModal()">✕</button></div>
+    ${entries.length===0?'<p style="color:var(--text3);font-size:13px">Nenhuma alteração registrada.</p>':
+      entries.map(e=>`<div class="log-entry">
+        <div class="log-dot" style="background:${e.color}"></div>
+        <div style="flex:1"><div class="log-msg">${e.msg}</div><div class="log-time">${new Date(e.ts).toLocaleString("pt-BR")}</div></div>
+      </div>`).join("")}
+  `;
+  document.getElementById("modal-overlay").classList.add("open");
+}
+function closeModal(){document.getElementById("modal-overlay").classList.remove("open");}
+document.getElementById("modal-overlay").addEventListener("click",e=>{if(e.target===e.currentTarget)closeModal();});
+
+// ══════════════════════════════════════════════════════
+// FILE UPLOAD
+// ══════════════════════════════════════════════════════
+document.getElementById("file-input").addEventListener("change",e=>{
+  const file=e.target.files[0]; if(!file) return;
+  const reader=new FileReader();
+  reader.onload=async ev=>{
+    try{
+      const wb=XLSX.read(ev.target.result,{type:"array"});
+      const ws=wb.Sheets[wb.SheetNames[0]];
+      const data=XLSX.utils.sheet_to_json(ws,{defval:""});
+      if(!data.length){showErr("Planilha vazia.");return;}
+      const id="sh_"+Date.now();
+      const sheetObj={id,name:file.name,date:new Date().toISOString(),count:data.length,data};
+      setSaveInd("saving");
+      await DB.saveSheet(sheetObj);
+      _sheetsCache = _sheetsCache ? [sheetObj,..._sheetsCache.filter(s=>s.id!==id)] : [sheetObj];
+      setSaveInd("saved");
+      hideErr();
+      toast(`📂 ${file.name} carregada com ${data.length} registros`,"success");
+      loadSheet(id);
+      renderSheetsList();
+    }catch(err){showErr("Erro: "+safeErr(err));}
+  };
+  reader.readAsArrayBuffer(file);
+  e.target.value="";
+});
+
+// Drag & Drop on empty
+document.addEventListener("dragover",e=>e.preventDefault());
+document.addEventListener("drop",e=>{
+  e.preventDefault();
+  const f=e.dataTransfer.files[0];
+  if(f&&(f.name.endsWith(".xlsx")||f.name.endsWith(".xls"))){
+    const dt=new DataTransfer();dt.items.add(f);
+    document.getElementById("file-input").files=dt.files;
+    document.getElementById("file-input").dispatchEvent(new Event("change"));
+  }
+});
+
+function showErr(msg){const e=document.getElementById("empty-err");e.textContent="⚠️ "+msg;e.style.display="block";}
+function hideErr(){document.getElementById("empty-err").style.display="none";}
+
+// ══════════════════════════════════════════════════════
+// SHEETS LIST
+// ══════════════════════════════════════════════════════
+function renameSheet(e, btn){
+  e.stopPropagation();
+  const id = btn.getAttribute("data-id");
+  const currentName = btn.getAttribute("data-name") || "";
+  // Replace name div with inline input
+  const wrap = document.getElementById("si-name-wrap-"+id);
+  if(!wrap) return;
+  const nameDiv = wrap.querySelector(".sheet-name");
+  if(!nameDiv) return;
+
+  // Create input
+  const input = document.createElement("input");
+  input.className = "rename-input";
+  input.value = currentName;
+  input.onclick = ev => ev.stopPropagation();
+
+  const save = async () => {
+    const newName = input.value.trim();
+    if(!newName || newName === currentName){
+      nameDiv.style.display = "";
+      input.remove();
+      return;
+    }
+    // Update in cache and Supabase
+    if(_sheetsCache){
+      const s = _sheetsCache.find(s=>s.id===id);
+      if(s){
+        s.name = newName;
+        await DB.saveSheet(s);
+      }
+    }
+    // Update header if active sheet
+    if(ACTIVE_SHEET_ID === id){
+      const meta = document.getElementById("hdr-meta");
+      if(meta) meta.textContent = `${newName} · ${ALL_ROWS.length}reg`;
+    }
+    renderSheetsList();
+    toast(`✏️ Planilha renomeada para "${newName}"`, "success");
+    addLog(`Planilha renomeada: <strong>${currentName}</strong> → <strong>${newName}</strong>`, "#4db8ff");
+  };
+
+  input.addEventListener("keydown", e => {
+    if(e.key === "Enter"){ e.preventDefault(); save(); }
+    if(e.key === "Escape"){ nameDiv.style.display=""; input.remove(); }
+  });
+  input.addEventListener("blur", save);
+
+  nameDiv.style.display = "none";
+  wrap.insertBefore(input, nameDiv);
+  input.focus();
+  input.select();
+}
+
+function renderSheetsList(){
+  const sheets=LS.getSheets();
+  const el=document.getElementById("sheets-list");
+  const none=document.getElementById("no-sheets");
+  if(!sheets.length){el.innerHTML="";none.style.display="block";return;}
+  none.style.display="none";
+  el.innerHTML=sheets.map(s=>`
+    <div class="sheet-item ${s.id===ACTIVE_SHEET_ID?"active":""}" id="si-${s.id}" onclick="loadSheet('${s.id}')">
+      <div class="sheet-dot" style="${s.mergeCount?'background:var(--blue)':''}"></div>
+      <div style="flex:1;min-width:0" id="si-name-wrap-${s.id}">
+        <div class="sheet-name">${s.name}</div>
+        <div class="sheet-date">${new Date(s.date).toLocaleDateString("pt-BR")} · ${s.count}reg${s.mergeCount?` · <span style="color:var(--blue)">${s.mergeCount} anexo${s.mergeCount>1?"s":""}</span>`:""}</div>
+      </div>
+      <button class="sheet-rename" onclick="renameSheet(event,this)" data-id="${s.id}" data-name="${s.name.replace(/"/g,'&quot;').replace(/'/g,'&#39;')}">✏️</button>
+      <button class="sheet-delete" onclick="deleteSheet(event,'${s.id}')">✕</button>
+    </div>`).join("");
+}
+
+function deleteSheet(e,id){
+  e.stopPropagation();
+  const sheets=LS.getSheets();
+  const sheet=sheets.find(s=>s.id===id);
+  if(!sheet) return;
+  // Show confirmation modal
+  document.getElementById("modal-content").innerHTML=`
+    <div class="modal-title" style="color:var(--red)">🗑️ Excluir Planilha? <button class="modal-close" onclick="closeModal()">✕</button></div>
+    <div style="background:#ff4d6d0d;border:1px solid #ff4d6d30;border-radius:10px;padding:16px;margin-bottom:20px">
+      <div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:4px">📄 ${sheet.name}</div>
+      <div style="font-size:12px;color:var(--text3);font-family:var(--mono)">${new Date(sheet.date).toLocaleDateString("pt-BR")} · ${sheet.count} registros${sheet.mergeCount?" · "+sheet.mergeCount+" anexo(s)":""}</div>
+    </div>
+    <p style="font-size:13px;color:var(--text2);line-height:1.6;margin-bottom:20px">
+      Esta ação é <strong style="color:var(--red)">permanente e irreversível</strong>. Todos os dados, status personalizados, marcações e histórico desta planilha serão perdidos.
+    </p>
+    <div style="display:flex;gap:8px;justify-content:flex-end">
+      <button class="btn btn-ghost" onclick="closeModal()" style="min-width:100px">Cancelar</button>
+      <button class="btn" onclick="confirmDeleteSheet('${id}')" style="background:var(--red);color:#fff;min-width:140px">🗑️ Sim, excluir</button>
+    </div>
+  `;
+  document.getElementById("modal-overlay").classList.add("open");
+}
+
+async function confirmDeleteSheet(id){
+  closeModal();
+  createBackup("antes-de-excluir-planilha");
+  await DB.deleteSheet(id);
+  if(ACTIVE_SHEET_ID===id){
+    ACTIVE_SHEET_ID=null; ALL_ROWS=[]; META={};
+    document.getElementById("dashboard").style.display="none";
+    document.getElementById("empty").style.display="flex";
+    document.getElementById("hdr-meta").textContent="nenhuma planilha ativa";
+    ["btn-merge","btn-export","btn-log"].forEach(b=>document.getElementById(b).style.display="none");
+    document.getElementById("upload-label").classList.remove("loaded");
+    document.getElementById("progress-wrap").style.display="none";
+    setSaveInd("idle");
+  }
+  renderSheetsList();
+  toast("Planilha excluída","info");
+}
+
+// ══════════════════════════════════════════════════════
+// LOAD SHEET
+// ══════════════════════════════════════════════════════
+async function loadSheet(id){
+  let sheet=(_sheetsCache||[]).find(s=>s.id===id);
+  if(!sheet){
+    const all=await DB.getSheets(); sheet=all.find(s=>s.id===id);
+  }
+  if(!sheet) return;
+  // If data not loaded yet, fetch full sheet data from Supabase
+  if(!sheet.data || !sheet.data.length){
+    try{
+      const rows = await supaFetch("sheets?id=eq."+id+"&select=data");
+      sheet.data = rows?.[0]?.data || [];
+      const ci = (_sheetsCache||[]).findIndex(s=>s.id===id);
+      if(ci>=0) _sheetsCache[ci].data = sheet.data;
+    }catch(e){
+      toast("Erro ao carregar dados da planilha: "+safeErr(e),"err");
+      return;
+    }
+  }
+  ACTIVE_SHEET_ID=id;
+  ALL_ROWS=sheet.data;
+  META=await DB.getMeta(id); _metaCache[id]=META;
+  LOG=await DB.getLog(id);
+  document.getElementById("empty").style.display="none";
+  document.getElementById("dashboard").style.display="block";
+  document.getElementById("hdr-meta").textContent=`${sheet.name} · ${ALL_ROWS.length} registros`;
+  document.getElementById("btn-merge").style.display="";
+  document.getElementById("btn-export").style.display="";
+  document.getElementById("btn-log").style.display="";
+  document.getElementById("nb-total").style.display="";
+  document.getElementById("nb-total").textContent=ALL_ROWS.length;
+  document.getElementById("upload-label").classList.add("loaded");
+  setSaveInd("saved");
+  buildDashboard();
+  renderSheetsList();
+  // Keep version badge fresh
+  const vb=document.getElementById("ver-badge");
+  if(vb && !vb.classList.contains("has-update")) vb.textContent="v"+APP_VERSION;
+  // populate filters
+  populateFilters();
+  applyFilters();
+  updateProgress();
+  updateFinBadge();
+  updateAbBadge();
+  // Re-render abertos if active
+  if(document.getElementById("view-abertos")&&document.getElementById("view-abertos").style.display!=="none") renderAbertos();
+  updateAbBadge();
+}
+
+// ══════════════════════════════════════════════════════
+// SAVE META (debounced)
+// ══════════════════════════════════════════════════════
+function scheduleSave(){
+  setSaveInd("saving");
+  clearTimeout(SAVE_TIMER);
+  SAVE_TIMER=setTimeout(async ()=>{
+    if(!ACTIVE_SHEET_ID) return;
+    const ok = await DB.saveMeta(ACTIVE_SHEET_ID, META);
+    if(ok) setSaveInd("saved"); else setSaveInd("error");
+  },600);
+}
+
+// ══════════════════════════════════════════════════════
+// COMPUTED STATS — single O(n) pass (replaces 7 separate iterations)
+// ══════════════════════════════════════════════════════
+function computeStats(rows){
+  const s={total:rows.length,totalReem:0,totalPago:0,aprovadas:0,andamento:0,canceladas:0,concluidos:0,comFrete:0,semFrete:0,totalFrete:0,byStatus:{},byMotivo:{},byUF:{},bySolucao:{},byCidade:{}};
+  rows.forEach(r=>{
+    const m=META[rowId(r)]||{},st=(r["Status da Devolução / Reembolso"]||"").toLowerCase();
+    s.totalReem+=parseBRL(r["Quantia total de reembolsos"]);
+    s.totalPago+=parseBRL(r["Valor pago pelo comprador"]);
+    if(st==="aprovada"||st==="disputa aprovada") s.aprovadas++;
+    if(st.includes("devolução")||st.includes("análise")||st.includes("pendente")||st.includes("retornado")||st.includes("coleta")||st==="em disputa") s.andamento++;
+    if(st.includes("cancelada")) s.canceladas++;
+    if(m.done||m.myStatus==="Concluído"||m.myStatus==="Disputa Perdida") s.concluidos++;
+    if(m.frete==="sim"){s.comFrete++;s.totalFrete+=parseBRL(m.freteVal||0);}else{s.semFrete++;}
+    const stk=r["Status da Devolução / Reembolso"]||"?"; s.byStatus[stk]=(s.byStatus[stk]||0)+1;
+    const mo=shortMotivo(r["Motivo da Devolução"]||"?"); s.byMotivo[mo]=(s.byMotivo[mo]||0)+1;
+    const uf=r["UF"]||"N/A"; s.byUF[uf]=(s.byUF[uf]||0)+1;
+    const sol=r["Solução para Retorno e Reembolso"]||"?"; s.bySolucao[sol]=(s.bySolucao[sol]||0)+1;
+    const cid=(r["Cidade"]||"N/A")+(r["UF"]?` (${r["UF"]})`:""); s.byCidade[cid]=(s.byCidade[cid]||0)+1;
+  });
+  return s;
+}
+
+// ══════════════════════════════════════════════════════
+// BUILD DASHBOARD (charts/KPIs)
+// ══════════════════════════════════════════════════════
+function buildDashboard(){
+  const rows=ALL_ROWS;
+  const st=computeStats(rows);
+  const total=st.total||1;
+  const totalReem=st.totalReem, totalPago=st.totalPago;
+  const aprovadas=st.aprovadas, andamento=st.andamento, canceladas=st.canceladas, conferidos=st.concluidos;
+
+  // KPIs
+  const kpis=[
+    {icon:"📦",label:"Total",val:total,color:C.shopee},
+    {icon:"💸",label:"Reembolsado",val:fmt(totalReem),color:C.red},
+    {icon:"🛒",label:"Valor Pago",val:fmt(totalPago),color:C.blue},
+    {icon:"✅",label:"Aprovadas",val:aprovadas,sub:((aprovadas/total)*100).toFixed(1)+"%",color:C.green},
+    {icon:"⏳",label:"Em Andamento",val:andamento,color:C.yellow},
+    {icon:"🚚",label:"Frete Pago",val:st.comFrete,sub:st.comFrete>0?fmt(st.totalFrete):"R$ 0,00",color:"#ff9548"},
+    {icon:"☑️",label:"Concluídos",val:conferidos,sub:((conferidos/total)*100).toFixed(1)+"%",color:C.purple},
+  ];
+  document.getElementById("kpi-grid").innerHTML=kpis.map((k,i)=>`
+    <div class="kpi anim" style="animation-delay:${i*.05}s">
+      <div class="kpi-stripe" style="background:${k.color}"></div>
+      <div class="kpi-icon">${k.icon}</div>
+      <div class="kpi-label">${k.label}</div>
+      <div class="kpi-val" style="color:${k.color}">${k.val}</div>
+      ${k.sub?`<div class="kpi-sub">${k.sub}</div>`:""}
+    </div>`).join("");
+
+  // group data — from single-pass computeStats
+  const sortedStatus=Object.entries(st.byStatus).sort((a,b)=>b[1]-a[1]);
+  const sortedMotivo=Object.entries(st.byMotivo).sort((a,b)=>b[1]-a[1]);
+  const sortedUF=Object.entries(st.byUF).sort((a,b)=>b[1]-a[1]).slice(0,12);
+  const sortedSol=Object.entries(st.bySolucao).sort((a,b)=>b[1]-a[1]);
+  const sortedCid=Object.entries(st.byCidade).sort((a,b)=>b[1]-a[1]).slice(0,12);
+
+  const hbar=(items,defaultColor)=>{
+    const max=Math.max(...items.map(i=>i.v),1);
+    return items.map(({k,v,c})=>`<div class="hbar-row">
+      <div class="hbar-label" title="${k}">${k}</div>
+      <div class="hbar-track"><div class="hbar-fill" style="width:${Math.max((v/max)*100,v>0?1:0)}%;background:${c||defaultColor||C.shopee}"></div></div>
+      <div class="hbar-n">${v}</div></div>`).join("");
+  };
+
+  document.getElementById("ch-motivos").innerHTML=hbar(sortedMotivo.slice(0,6).map(([k,v])=>({k,v})),C.shopee);
+  document.getElementById("ch-motivos2").innerHTML=hbar(sortedMotivo.map(([k,v])=>({k,v})),C.shopee);
+  document.getElementById("ch-status").innerHTML=hbar(sortedStatus.map(([k,v])=>({k,v,c:statusColor(k)})));
+  document.getElementById("ch-uf").innerHTML=hbar(sortedUF.map(([k,v])=>({k,v})),C.shopee);
+  document.getElementById("ch-cidades").innerHTML=hbar(sortedCid.map(([k,v])=>({k,v})),C.blue);
+
+  document.getElementById("ch-solucao").innerHTML=hbar(sortedSol.map(([k,v])=>({k,v,c:k.includes("Apenas")?C.purple:C.shopee})));
+  document.getElementById("sol-cards").innerHTML=sortedSol.map(([k,v])=>`
+    <div class="sol-card"><div class="sol-num" style="color:${k.includes("Apenas")?C.purple:C.shopee}">${v}</div>
+    <div class="sol-lbl">${k}</div><div class="sol-pct">${((v/total)*100).toFixed(1)}%</div></div>`).join("");
+
+  document.getElementById("status-cards").innerHTML=sortedStatus.map(([st,qty])=>{
+    const color=statusColor(st);
+    const reem=rows.filter(r=>r["Status da Devolução / Reembolso"]===st).reduce((s,r)=>s+parseBRL(r["Quantia total de reembolsos"]),0);
+    return `<div class="stcard" style="background:${color}10;border:1px solid ${color}25">
+      ${badge(st,color)}<div class="stcard-qty" style="color:${color}">${qty}</div>
+      <div class="stcard-val">${fmt(reem)}</div></div>`;
+  }).join("");
+
+  document.getElementById("uf-grid").innerHTML=sortedUF.slice(0,9).map(([uf,qty],i)=>`
+    <div class="uf-card ${i===0?"top":""}">
+      ${i===0?'<div class="uf-top">▲ MAIS</div>':""}
+      <div class="uf-name">${uf}</div>
+      <div class="uf-n" style="color:${i===0?C.shopee:"var(--text)"}">${qty}</div></div>`).join("");
+  // Frete charts
+  const chFrete=document.getElementById("ch-frete");
+  if(chFrete) chFrete.innerHTML=hbar([{k:"Com frete pago",v:st.comFrete,c:"#ff9548"},{k:"Sem frete",v:st.semFrete,c:C.gray}]);
+  const chFreteVal=document.getElementById("ch-frete-val");
+  if(chFreteVal) chFreteVal.innerHTML=`<div style="font-family:var(--mono);font-size:30px;font-weight:700;color:#ff9548;margin-bottom:6px">${fmt(st.totalFrete)}</div><div style="font-size:12px;color:var(--text3)">${st.comFrete} pedido${st.comFrete!==1?"s":""} · média ${st.comFrete>0?fmt(st.totalFrete/st.comFrete):"R$ 0,00"}/pedido</div>`;
+}
+
+// ══════════════════════════════════════════════════════
+// VIEW SWITCHER
+// ══════════════════════════════════════════════════════
+function switchView(id, btn){
+  document.querySelectorAll(".nav-btn").forEach(b=>b.classList.remove("active"));
+  document.querySelectorAll(".view").forEach(v=>v.style.display="none");
+  if(btn) btn.classList.add("active");
+  const viewEl = document.getElementById("view-"+id);
+  if(viewEl) viewEl.style.display="";
+  if(id==="tabela") renderTable();
+  if(id==="finalizados") renderFinalizados();
+  if(id==="abertos"){ renderAbertos(); updateGoal(); }
+  if(id==="produtos") renderProdutos();
+  if(id==="compare") initCompare();
+}
+
+
+// ══════════════════════════════════════════════════════
+// GLOBAL SEARCH
+// ══════════════════════════════════════════════════════
+let GS_TIMER=null;
+function globalSearch(q){
+  const res=document.getElementById("global-results");
+  clearTimeout(GS_TIMER);
+  if(!q||q.length<2||!ALL_ROWS.length){res.classList.remove("open");return;}
+  GS_TIMER=setTimeout(()=>{
+    const ql=q.toLowerCase();
+    const seen=new Set();
+    const hits=ALL_ROWS.filter(r=>{
+      if(!(
+        String(r["ID da Devolução"]||"").toLowerCase().includes(ql)||
+        String(r["ID do pedido"]||r["ID do Pedido"]||r["Nº do pedido"]||r["Número do Pedido"]||"").toLowerCase().includes(ql)||
+        String(r["Nome do Produto"]||"").toLowerCase().includes(ql)||
+        String(r["Nome de usuário (Comprador)"]||r["Comprador"]||"").toLowerCase().includes(ql)||
+        String(r["Cidade"]||"").toLowerCase().includes(ql)
+      )) return false;
+      const id=rowId(r); if(seen.has(id)) return false; seen.add(id); return true;
+    }).slice(0,8);
+    if(!hits.length){res.classList.remove("open");return;}
+    res.innerHTML=hits.map(r=>{
+      const id=rowId(r),m=META[id]||{},st=m.myStatus||"Pendente",color=STATUS_COLORS[st]||C.gray;
+      return `<div class="gr-item" onclick="openDetailFromSearch('${id}')">
+        <span class="gr-id">${r["ID da Devolução"]||"—"}</span>
+        <span class="gr-prod">${r["Nome do Produto"]||"—"}</span>
+        <span class="badge" style="background:${color}18;color:${color};border:1px solid ${color}30;font-size:10px;flex-shrink:0">${st}</span>
+      </div>`;
+    }).join("");
+    res.classList.add("open");
+  },200);
+}
+function openDetailFromSearch(id){
+  document.getElementById("global-results").classList.remove("open");
+  document.getElementById("global-search").value="";
+  openDetail(id);
+}
+document.addEventListener("click",e=>{if(!e.target.closest("#global-search-wrap")) document.getElementById("global-results").classList.remove("open");});
+
+// ══════════════════════════════════════════════════════
+// REFRESH HELPERS (eliminates duplicate calls)
+// ══════════════════════════════════════════════════════
+function refreshAll(){
+  buildDashboard(); populateFilters(); applyFilters();
+  updateProgress(); updateFinBadge(); updateAbBadge(); updateGoal();
+  if(document.getElementById("view-finalizados").style.display!=="none") renderFinalizados();
+  if(document.getElementById("view-abertos").style.display!=="none") renderAbertos();
+  if(document.getElementById("view-produtos")&&document.getElementById("view-produtos").style.display!=="none") renderProdutos();
+}
+function refreshBadgesOnly(){
+  updateProgress(); updateFinBadge(); updateAbBadge();
+  if(document.getElementById("view-abertos").style.display!=="none") renderAbertos();
+  if(document.getElementById("view-finalizados").style.display!=="none") renderFinalizados();
+}
+
+// ══════════════════════════════════════════════════════
+// FRETE DE DEVOLUÇÃO
+// ══════════════════════════════════════════════════════
+function toggleFrete(id, btn){
+  if(!META[id]) META[id]={};
+  const isNowSim = META[id].frete!=="sim";
+  META[id].frete = isNowSim?"sim":"nao";
+  if(!isNowSim) META[id].freteVal="";
+  btn.className="frete-toggle "+(isNowSim?"sim":"nao");
+  btn.textContent=isNowSim?"🚚 Sim":"Não";
+  const mini=btn.closest(".frete-mini");
+  if(mini){
+    const existing=mini.querySelector(".frete-input-inline");
+    if(isNowSim&&!existing){
+      const inp=document.createElement("input");
+      inp.className="frete-input-inline";inp.type="text";inp.placeholder="R$ 0,00";inp.value=META[id].freteVal||"";
+      inp.onchange=()=>saveFrete(id,inp.value);inp.onclick=e=>e.stopPropagation();
+      mini.appendChild(inp);
+    } else if(!isNowSim&&existing){existing.remove();}
+  }
+  scheduleSave(); buildDashboard();
+  addLog(`Frete de <strong>${id.slice(0,18)}</strong>: ${isNowSim?"marcado ✅":"removido"}`,isNowSim?"#ff9548":C.gray);
+}
+function saveFrete(id, val){
+  if(!META[id]) META[id]={};
+  META[id].freteVal=val; scheduleSave(); buildDashboard();
+}
+function setFreteModal(id, val){
+  if(!META[id]) META[id]={};
+  META[id].frete=val;
+  document.getElementById("fr-sim").className="frete-radio "+(val==="sim"?"active-sim":"");
+  document.getElementById("fr-nao").className="frete-radio "+(val==="nao"?"active-nao":"");
+  const wrap=document.getElementById("frete-val-wrap");if(wrap) wrap.style.display=val==="sim"?"block":"none";
+  if(val!=="sim") META[id].freteVal="";
+  scheduleSave(); buildDashboard();
+}
+function saveFreteModal(id, val){
+  if(!META[id]) META[id]={}; META[id].freteVal=val; scheduleSave(); buildDashboard();
+}
+
+// ══════════════════════════════════════════════════════
+// BULK ACTIONS
+// ══════════════════════════════════════════════════════
+let SELECTED_IDS = new Set();
+function updateBulkBar(){
+  const bar=document.getElementById("bulk-bar"),ct=document.getElementById("bulk-count");
+  const n=SELECTED_IDS.size;
+  if(n>0){bar.classList.add("show");ct.textContent=`${n} selecionado${n>1?"s":""}`;}
+  else{bar.classList.remove("show");}
+}
+function bulkClearSelection(){SELECTED_IDS.clear();renderTable();}
+function bulkConclude(){
+  SELECTED_IDS.forEach(id=>{
+    if(!META[id]) META[id]={};
+    META[id].done=true;META[id].myStatus="Concluído";
+    if(!META[id].concludedAt) META[id].concludedAt=new Date().toISOString();
+  });
+  const n=SELECTED_IDS.size;SELECTED_IDS.clear();
+  scheduleSave();refreshBadgesOnly();renderTable();
+  toast(`✅ ${n} pedidos concluídos`,"success");
+  addLog(`<strong>${n}</strong> pedidos concluídos em lote`,C.green);
+}
+function bulkSetStatus(){
+  const opts=STATUS_OPTIONS.map(s=>`<option value="${s}">${s}</option>`).join("");
+  document.getElementById("modal-content").innerHTML=`
+    <div class="modal-title">📋 Status em Lote <button class="modal-close" onclick="closeModal()">✕</button></div>
+    <p style="font-size:13px;color:var(--text2);margin-bottom:14px">${SELECTED_IDS.size} pedido(s) selecionado(s).</p>
+    <div class="field-group">
+      <label class="field-label">Novo Status</label>
+      <select class="field-input" id="bulk-status-sel">${opts}</select>
+    </div>
+    <div style="display:flex;gap:8px;justify-content:flex-end">
+      <button class="btn btn-ghost" onclick="closeModal()">Cancelar</button>
+      <button class="btn btn-primary" onclick="applyBulkStatus()">Aplicar</button>
+    </div>`;
+  document.getElementById("modal-overlay").classList.add("open");
+}
+function applyBulkStatus(){
+  const newSt=document.getElementById("bulk-status-sel").value,color=STATUS_COLORS[newSt]||C.gray;
+  SELECTED_IDS.forEach(id=>{
+    if(!META[id]) META[id]={};
+    META[id].myStatus=newSt;
+    if(newSt==="Concluído"||newSt==="Disputa Perdida"){META[id].done=true;if(!META[id].concludedAt) META[id].concludedAt=new Date().toISOString();}
+    else if(META[id].done&&newSt!=="Concluído"&&newSt!=="Disputa Perdida"){META[id].done=false;delete META[id].concludedAt;}
+  });
+  const n=SELECTED_IDS.size;SELECTED_IDS.clear();
+  closeModal();scheduleSave();refreshBadgesOnly();renderTable();
+  toast(`${n} pedidos → ${newSt}`,"info");
+  addLog(`<strong>${n}</strong> pedidos → status <strong>${newSt}</strong>`,color);
+}
+
+// ══════════════════════════════════════════════════════
+// FILTERS & TABLE
+// ══════════════════════════════════════════════════════
+function populateFilters(){
+  const stSel=document.getElementById("flt-status");
+  const stSet=new Set(ALL_ROWS.map(r=>r["Status da Devolução / Reembolso"]).filter(Boolean));
+  stSel.innerHTML='<option value="">Todos os status (Shopee)</option>'+[...stSet].map(s=>`<option value="${s}">${s}</option>`).join("");
+
+  const moSel=document.getElementById("flt-motivo");
+  const moSet=new Set(ALL_ROWS.map(r=>shortMotivo(r["Motivo da Devolução"]||"")).filter(Boolean));
+  moSel.innerHTML='<option value="">Todos os motivos</option>'+[...moSet].map(m=>`<option value="${m}">${m}</option>`).join("");
+}
+
+function applyFilters(){
+  const q=(document.getElementById("tbl-search").value||"").toLowerCase();
+  const fSt=document.getElementById("flt-status").value;
+  const fMo=document.getElementById("flt-motivo").value;
+  const fCo=document.getElementById("flt-conf").value;
+  const fOr=(document.getElementById("flt-origem")||{}).value||"";
+  const fFr=(document.getElementById("flt-frete")||{}).value||"";
+  FILTERED=ALL_ROWS.filter(r=>{
+    const id=rowId(r);const m=META[id]||{};
+    if(fSt&&r["Status da Devolução / Reembolso"]!==fSt) return false;
+    if(fMo&&shortMotivo(r["Motivo da Devolução"]||"")!==fMo) return false;
+    if(fCo!==""){const done=!!(m.done||m.myStatus==="Concluído"||m.myStatus==="Disputa Perdida"); if(fCo==="1"&&!done) return false; if(fCo==="0"&&done) return false;}
+    if(fOr==="original"&&r._mergedFrom) return false;
+    if(fOr==="anexado"&&!r._mergedFrom) return false;
+    if(fFr==="sim"&&m.frete!=="sim") return false;
+    if(fFr==="nao"&&m.frete==="sim") return false;
+    if(q){
+      const matches=String(r["ID da Devolução"]||"").toLowerCase().includes(q)||
+        String(r["ID do pedido"]||r["ID do Pedido"]||r["Nº do pedido"]||r["Número do Pedido"]||"").toLowerCase().includes(q)||
+        String(r["Nome do Produto"]||"").toLowerCase().includes(q)||
+        String(r["Nome de usuário (Comprador)"]||r["Comprador"]||"").toLowerCase().includes(q)||
+        String(r["Cidade"]||"").toLowerCase().includes(q);
+      return matches;
+    }
+    return true;
+  });
+  PAGE=0;
+  renderTable();
+}
+
+function renderTable(){
+  const total=FILTERED.length;
+  const pages=Math.ceil(total/PER)||1;
+  const slice=FILTERED.slice(PAGE*PER,(PAGE+1)*PER);
+  document.getElementById("tbl-count").textContent=`${total} de ${ALL_ROWS.length}`;
+  document.getElementById("pg-count").textContent=total+" registros";
+  document.getElementById("pg-info").textContent=`${PAGE+1} / ${pages}`;
+  document.getElementById("pg-prev").disabled=PAGE===0;
+  document.getElementById("pg-next").disabled=PAGE>=pages-1;
+  // Sync top pagination
+  const pagTop=document.getElementById("pag-top");
+  if(pagTop) pagTop.style.display=pages>1?"flex":"none";
+  const pgct=document.getElementById("pg-count-top"); if(pgct) pgct.textContent=total+" registros";
+  const pgit=document.getElementById("pg-info-top"); if(pgit) pgit.textContent=`${PAGE+1} / ${pages}`;
+  const pgprt=document.getElementById("pg-prev-top"); if(pgprt) pgprt.disabled=PAGE===0;
+  const pgnxt=document.getElementById("pg-next-top"); if(pgnxt) pgnxt.disabled=PAGE>=pages-1;
+
+  document.getElementById("tbl-body").innerHTML=slice.map(r=>{
+    const id=rowId(r);
+    const m=META[id]||{};
+    const done=!!(m.done||m.myStatus==="Concluído"||m.myStatus==="Disputa Perdida");
+    const mySt=m.myStatus||"Pendente";
+    const stColor=STATUS_COLORS[mySt]||C.gray;
+    const origSt=r["Status da Devolução / Reembolso"]||"";
+    const opts=STATUS_OPTIONS.map(s=>`<option value="${s}" ${s===mySt?"selected":""}>${s}</option>`).join("");
+    const rowClass=done?"done":mySt==="Em Andamento"?"st-andamento":mySt==="Aguardando Retorno"?"st-aguardando":mySt==="Cancelado"?"st-cancelado":"";
+    const hasFrete=m.frete==="sim", freteVal=m.freteVal||"";
+    const freteHtml=`<div class="frete-mini">
+      <button class="frete-toggle ${hasFrete?"sim":"nao"}" onclick="toggleFrete('${id}',this)">${hasFrete?"🚚 Sim":"Não"}</button>
+      ${hasFrete?`<input class="frete-input-inline" type="text" value="${freteVal}" placeholder="R$ 0,00" onchange="saveFrete('${id}',this.value)" onclick="event.stopPropagation()"/>`:""}
+    </div>`;
+    return `<tr class="${rowClass}" id="row-${id.replace(/\W/g,'_')}">
+      <td class="td-check"><input type="checkbox" class="cb row-cb" data-id="${id}" ${done?"checked":""} onchange="toggleDone('${id}',this)"/></td>
+      <td><span class="td-id">${r["ID da Devolução"]||"—"}</span>${r._mergedFrom?'<span class="merge-tag new" style="margin-left:4px">+novo</span>':""}</td>
+      <td><span class="td-prod" title="${r["Nome do Produto"]||""}">${r["Nome do Produto"]||"—"}</span></td>
+      <td>${badge(origSt||"—",statusColor(origSt))}</td>
+      <td><select class="st-sel" style="background:${stColor}18;color:${stColor};border-color:${stColor}40" onchange="changeMyStatus('${id}',this)">${opts}</select></td>
+      <td><span class="td-muted">${shortMotivo(r["Motivo da Devolução"]||"")}</span></td>
+      <td><span class="td-val">${fmt(parseBRL(r["Quantia total de reembolsos"]))}</span></td>
+      <td>${freteHtml}</td>
+      <td><span class="td-muted">${r["Cidade"]||"—"}${r["UF"]?" / "+r["UF"]:""}</span></td>
+      <td><span class="td-date">${fmtDate(r["Data de criação do pedido"])}</span></td>
+      <td><button class="btn btn-ghost btn-sm" onclick="openDetail('${id}')">Ver</button></td>
+    </tr>`;
+  }).join("");
+  updateBulkBar();
+}
+
+function changePage(d){
+  const pages=Math.ceil(FILTERED.length/PER)||1;
+  PAGE=Math.max(0,Math.min(pages-1,PAGE+d));
+  renderTable();
+}
+
+// ══════════════════════════════════════════════════════
+// TOGGLE DONE
+// ══════════════════════════════════════════════════════
+function toggleDone(id, cb){
+  if(!META[id]) META[id]={};
+  const wasDone = META[id].done;
+  META[id].done = cb.checked;
+  // Auto-set myStatus to Concluído when checked, revert to Pendente when unchecked
+  if(cb.checked && (!META[id].myStatus || META[id].myStatus==="Pendente")){
+    META[id].myStatus = "Concluído";
+    META[id].concludedAt = new Date().toISOString();
+  } else if(!cb.checked && (META[id].myStatus==="Concluído"||META[id].myStatus==="Disputa Perdida")){
+    META[id].myStatus = "Pendente";
+    delete META[id].concludedAt;
+  }
+  // Update row visually if in table view
+  const rowEl=document.getElementById("row-"+id.replace(/\W/g,'_'));
+  if(rowEl){
+    const mySt=META[id].myStatus||"Pendente";
+    const stColor=STATUS_COLORS[mySt]||C.gray;
+    rowEl.className=cb.checked?"done":"";
+    const sel=rowEl.querySelector(".st-sel");
+    if(sel){sel.value=mySt;sel.style.background=stColor+"18";sel.style.color=stColor;sel.style.borderColor=stColor+"40";}
+  }
+  addLog(cb.checked?`Pedido <strong>${id.slice(0,20)}</strong> marcado como <strong>Concluído</strong>`:`Pedido <strong>${id.slice(0,20)}</strong> reaberto`,cb.checked?C.green:C.yellow);
+  scheduleSave();
+  updateProgress();
+  updateFinBadge();
+  updateAbBadge();
+  // Re-render abertos if active
+  if(document.getElementById("view-abertos")&&document.getElementById("view-abertos").style.display!=="none") renderAbertos();
+  updateAbBadge();
+  // Re-render abertos if that view is active
+  if(document.getElementById("view-abertos").style.display!=="none") renderAbertos();
+}
+
+function toggleAll(masterCb){
+  const slice=FILTERED.slice(PAGE*PER,(PAGE+1)*PER);
+  slice.forEach(r=>{
+    const id=rowId(r);
+    if(!META[id]) META[id]={};
+    META[id].done=masterCb.checked;
+    if(masterCb.checked){
+      if(!META[id].myStatus||META[id].myStatus==="Pendente") META[id].myStatus="Concluído";
+      if(!META[id].concludedAt) META[id].concludedAt=new Date().toISOString();
+    } else if(META[id].myStatus==="Concluído"){
+      META[id].myStatus="Pendente";
+      delete META[id].concludedAt;
+    }
+  });
+  renderTable();
+  scheduleSave();
+  updateProgress();
+  updateFinBadge();
+  updateAbBadge();
+  // Re-render abertos if active
+  if(document.getElementById("view-abertos")&&document.getElementById("view-abertos").style.display!=="none") renderAbertos();
+  updateAbBadge();
+  toast(masterCb.checked?"Pedidos marcados como Concluídos":"Marcações removidas","info");
+}
+
+function markAllVisible(){
+  FILTERED.forEach(r=>{
+    const id=rowId(r);
+    if(!META[id])META[id]={};
+    META[id].done=true;
+    if(!META[id].myStatus||META[id].myStatus==="Pendente") META[id].myStatus="Concluído";
+    if(!META[id].concludedAt) META[id].concludedAt=new Date().toISOString();
+  });
+  renderTable();
+  scheduleSave();
+  updateProgress();
+  updateFinBadge();
+  updateAbBadge();
+  // Re-render abertos if active
+  if(document.getElementById("view-abertos")&&document.getElementById("view-abertos").style.display!=="none") renderAbertos();
+  updateAbBadge();
+  toast(`${FILTERED.length} pedidos concluídos 🎉`,"success");
+  addLog(`<strong>${FILTERED.length}</strong> pedidos marcados como Concluídos em lote`,C.green);
+}
+
+// ══════════════════════════════════════════════════════
+// CHANGE MY STATUS
+// ══════════════════════════════════════════════════════
+function changeMyStatus(id, sel){
+  const newSt=sel.value;
+  if(!META[id]) META[id]={};
+  const oldSt=META[id].myStatus||"Pendente";
+  META[id].myStatus=newSt;
+  // Sync done checkbox with Concluído / Disputa Perdida status
+  if(newSt==="Concluído"||newSt==="Disputa Perdida"){
+    META[id].done=true;
+    if(!META[id].concludedAt) META[id].concludedAt=new Date().toISOString();
+    const rowEl=document.getElementById("row-"+id.replace(/\W/g,'_'));
+    if(rowEl){rowEl.className="done";const cb=rowEl.querySelector(".row-cb");if(cb)cb.checked=true;}
+  } else if(oldSt==="Concluído"||oldSt==="Disputa Perdida"){
+    META[id].done=false;
+    delete META[id].concludedAt;
+    const rowEl=document.getElementById("row-"+id.replace(/\W/g,'_'));
+    if(rowEl){rowEl.className="";const cb=rowEl.querySelector(".row-cb");if(cb)cb.checked=false;}
+  }
+  const color=STATUS_COLORS[newSt]||C.gray;
+  sel.style.background=color+"18";
+  sel.style.color=color;
+  sel.style.borderColor=color+"40";
+  addLog(`Status de <strong>${id.slice(0,20)}</strong>: <strong>${oldSt}</strong> → <strong>${newSt}</strong>`,color);
+  scheduleSave();
+  updateProgress();
+  updateFinBadge();
+  updateAbBadge();
+  // Re-render abertos if active
+  if(document.getElementById("view-abertos")&&document.getElementById("view-abertos").style.display!=="none") renderAbertos();
+  updateAbBadge();
+  // Re-render abertos if that view is active
+  if(document.getElementById("view-abertos")&&document.getElementById("view-abertos").style.display!=="none") renderAbertos();
+}
+
+// ══════════════════════════════════════════════════════
+// DETAIL MODAL
+// ══════════════════════════════════════════════════════
+function openDetail(id){
+  const r=ALL_ROWS.find(row=>rowId(row)===id);
+  if(!r) return;
+  const m=META[id]||{};
+  const fields=[
+    ["ID da Devolução",r["ID da Devolução"]],["ID do Pedido",r["ID do Pedido"]],
+    ["Produto",r["Nome do Produto"]],["Variação",r["Nome da variação"]],
+    ["Status Shopee",r["Status da Devolução / Reembolso"]],["Motivo",r["Motivo da Devolução"]],
+    ["Solução",r["Solução para Retorno e Reembolso"]],["Reembolso",fmt(parseBRL(r["Quantia total de reembolsos"]))],
+    ["Valor Pago",fmt(parseBRL(r["Valor pago pelo comprador"]))],["Comprador",r["Nome de usuário (Comprador)"]||r["Comprador"]],
+    ["Cidade",r["Cidade"]],["Estado",r["UF"]],["Data do Pedido",fmtDate(r["Data de criação do pedido"])],
+    ["Data da Devolução",fmtDate(r["Data de criação da devolução"]||r["Data da devolução"])],
+  ].filter(([,v])=>v);
+
+  document.getElementById("modal-content").innerHTML=`
+    <div class="modal-title">📦 Detalhe do Pedido <button class="modal-close" onclick="closeModal()">✕</button></div>
+    <div style="display:grid;gap:6px;margin-bottom:20px">
+      ${fields.map(([k,v])=>`<div class="detail-row"><div class="detail-key">${k}</div><div class="detail-val">${v||"—"}</div></div>`).join("")}
+    </div>
+    <div class="field-group">
+      <label class="field-label">Meu Status</label>
+      <select class="field-input" id="det-status" onchange="changeMyStatus('${id}',this);updateProgress();updateFinBadge();updateAbBadge();">
+        ${STATUS_OPTIONS.map(s=>`<option value="${s}" ${s===(m.myStatus||"Pendente")?"selected":""}>${s}</option>`).join("")}
+      </select>
+    </div>
+    <div class="frete-section">
+      <div class="frete-section-title">🚚 Frete de Devolução</div>
+      <div class="frete-radio-group">
+        <div class="frete-radio ${m.frete==='sim'?'active-sim':''}" id="fr-sim" onclick="setFreteModal('${id}','sim')">✅ Pagou frete</div>
+        <div class="frete-radio ${m.frete!=='sim'?'active-nao':''}" id="fr-nao" onclick="setFreteModal('${id}','nao')">❌ Não pagou</div>
+      </div>
+      <div id="frete-val-wrap" style="display:${m.frete==='sim'?'block':'none'}">
+        <label class="field-label">Valor do Frete (R$)</label>
+        <input class="field-input" id="det-frete-val" type="text" placeholder="Ex: 18,90" value="${m.freteVal||''}" oninput="saveFreteModal('${id}',this.value)"/>
+      </div>
+    </div>
+    <div class="field-group">
+      <label class="field-label">Anotação</label>
+      <textarea class="field-input" rows="3" id="det-note" placeholder="Adicione uma nota…" oninput="saveNote('${id}',this)">${m.note||""}</textarea>
+    </div>
+    <div style="display:flex;gap:8px;margin-top:8px">
+      <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px">
+        <input type="checkbox" class="cb" id="det-done" ${m.done?"checked":""} onchange="toggleDone('${id}',this)"/>
+        Marcar como Concluído
+      </label>
+    </div>`;
+  document.getElementById("modal-overlay").classList.add("open");
+}
+
+function saveNote(id, ta){
+  if(!META[id]) META[id]={};
+  META[id].note=ta.value;
+  scheduleSave();
+}
+
+// ══════════════════════════════════════════════════════
+// EXPORT XLSX
+// ══════════════════════════════════════════════════════
+function exportXLSX(){
+  if(!ALL_ROWS.length) return;
+  const exported=ALL_ROWS.map(r=>{
+    const id=rowId(r);
+    const m=META[id]||{};
+    return{...r,"Meu Status":m.myStatus||"Pendente","Conferido":m.done?"Sim":"Não","Frete Devolução":m.frete==="sim"?"Sim":"Não","Valor do Frete":m.freteVal||"","Anotação":m.note||"","Data Conclusão":m.concludedAt?new Date(m.concludedAt).toLocaleString("pt-BR"):""};
+  });
+  const wb=XLSX.utils.book_new();
+  const ws=XLSX.utils.json_to_sheet(exported);
+  XLSX.utils.book_append_sheet(wb,ws,"Devoluções");
+  const sheets=LS.getSheets();
+  const active=sheets.find(s=>s.id===ACTIVE_SHEET_ID);
+  const fname=(active?active.name.replace(".xlsx",""):"devolucoes")+"_atualizado.xlsx";
+  XLSX.writeFile(wb,fname);
+  toast("Planilha exportada com sucesso! 🎉","success");
+  addLog("Planilha exportada: <strong>"+fname+"</strong>",C.blue);
+}
+
+
+
+// ══════════════════════════════════════════════════════
+// PROGRESS BAR
+// ══════════════════════════════════════════════════════
+function updateProgress(){
+  if(!ALL_ROWS.length) return;
+  const total = ALL_ROWS.length;
+  const concluidos = ALL_ROWS.filter(r => {
+    const m = META[rowId(r)] || {};
+    return m.done || m.myStatus === "Concluído" || m.myStatus === "Disputa Perdida";
+  }).length;
+  const pendentes = ALL_ROWS.filter(r => {
+    const m = META[rowId(r)] || {};
+    return !m.done && (!m.myStatus || m.myStatus === "Pendente");
+  }).length;
+  const andamento = ALL_ROWS.filter(r => {
+    const m = META[rowId(r)] || {};
+    return !m.done && m.myStatus && m.myStatus !== "Pendente" && m.myStatus !== "Concluído" && m.myStatus !== "Cancelado";
+  }).length;
+  const cancelados = ALL_ROWS.filter(r => {
+    const m = META[rowId(r)] || {};
+    return m.myStatus === "Cancelado";
+  }).length;
+
+  const pct = total > 0 ? ((concluidos / total) * 100) : 0;
+
+  const fill = document.getElementById("progress-fill");
+  const pctEl = document.getElementById("progress-pct");
+  const subEl = document.getElementById("progress-sub");
+  const segs = document.getElementById("progress-segments");
+  if(!fill) return;
+
+  fill.style.width = pct.toFixed(1) + "%";
+  // Color gradient based on progress
+  if(pct >= 80) fill.style.background = "linear-gradient(90deg,#00c896,#00e5a0)";
+  else if(pct >= 50) fill.style.background = "linear-gradient(90deg,#4db8ff,#00c896)";
+  else if(pct >= 20) fill.style.background = "linear-gradient(90deg,#ffc540,#4db8ff)";
+  else fill.style.background = "linear-gradient(90deg,#ff4820,#ffc540)";
+
+  pctEl.textContent = pct.toFixed(1) + "%";
+  pctEl.style.color = pct >= 80 ? "#00e5a0" : pct >= 50 ? "#4db8ff" : pct >= 20 ? "#ffc540" : "#ff4820";
+  subEl.textContent = `${concluidos} de ${total} pedidos concluídos`;
+
+  segs.innerHTML = [
+    {label:"Concluídos", val:concluidos, color:"#00e5a0"},
+    {label:"Em Andamento", val:andamento, color:"#ffc540"},
+    {label:"Pendentes", val:pendentes, color:"#4a5578"},
+    {label:"Cancelados", val:cancelados, color:"#ff4d6d"},
+  ].filter(s => s.val > 0).map(s =>
+    `<span class="prog-seg" style="background:${s.color}15;border:1px solid ${s.color}30;color:${s.color}">
+      <span class="prog-dot" style="background:${s.color}"></span>${s.val} ${s.label}
+    </span>`
+  ).join("");
+
+  // Update KPI conferidos card
+  const kpiEl = document.querySelector(".kpi:last-child .kpi-val");
+  if(kpiEl) kpiEl.textContent = concluidos;
+}
+
+// ══════════════════════════════════════════════════════
+// FINALIZADOS BADGE
+// ══════════════════════════════════════════════════════
+function updateFinBadge(){
+  const count = ALL_ROWS.filter(r => {
+    const m = META[rowId(r)] || {};
+    return m.done || m.myStatus === "Concluído" || m.myStatus === "Disputa Perdida";
+  }).length;
+  const badge = document.getElementById("nb-finalizados");
+  if(badge){ badge.textContent = count; badge.style.display = count > 0 ? "" : "none"; }
+}
+
+// ══════════════════════════════════════════════════════
+// RENDER FINALIZADOS
+// ══════════════════════════════════════════════════════
+let FIN_PAGE = 0;
+const FIN_PER = 24;
+
+
+// ══════════════════════════════════════════════════════
+// CONCLUSION TYPE BADGE HELPER
+// ══════════════════════════════════════════════════════
+function getConclusionType(m){
+  const st = m.myStatus || "";
+  if(st === "Disputa Perdida")
+    return {label:"Disputa Perdida", icon:"⚖️", color:C.red};
+  if(st === "Reembolsado")
+    return {label:"Reembolsado", icon:"💰", color:C.green};
+  if(m.frete === "sim")
+    return {label:"Frete de Devolução", icon:"🚚", color:"#ff9548"};
+  // Check original Shopee status for clues
+  return {label:"Finalizado", icon:"✅", color:C.green};
+}
+function getConclusionTypeLabel(m, origSt){
+  const st = m.myStatus || "";
+  const oLower = (origSt||"").toLowerCase();
+  if(st === "Disputa Perdida") return "Disputa Perdida";
+  if(st === "Reembolsado") return "Reembolsado";
+  if(m.frete === "sim") return "Frete de Devolução";
+  if(oLower.includes("aprovada") || oLower.includes("reembolso")) return "Reembolsado";
+  if(oLower.includes("cancelada")) return "Cancelado — Voltou OK";
+  if(oLower.includes("retornado")) return "Voltou OK";
+  return "Concluído";
+}
+
+function getConclusionTypeBadgeHTML(m, origSt){
+  const st = m.myStatus || "";
+  const oLower = (origSt||"").toLowerCase();
+  let label, icon, color;
+  if(st === "Disputa Perdida"){
+    label="Disputa Perdida"; icon="⚖️"; color=C.red;
+  } else if(st === "Reembolsado"){
+    label="Reembolsado"; icon="💰"; color=C.green;
+  } else if(m.frete === "sim"){
+    label="Frete de Devolução"; icon="🚚"; color="#ff9548";
+  } else if(oLower.includes("aprovada") || oLower.includes("reembolso")){
+    label="Reembolsado"; icon="💰"; color=C.green;
+  } else if(oLower.includes("cancelada")){
+    label="Cancelado — Voltou OK"; icon="↩️"; color=C.blue;
+  } else if(oLower.includes("retornado")){
+    label="Voltou OK"; icon="📦"; color=C.blue;
+  } else {
+    label="Concluído"; icon="✅"; color=C.green;
+  }
+  return `<span class="fin-tipo" style="background:${color}18;color:${color};border:1px solid ${color}33">${icon} ${label}</span>`;
+}
+
+function renderFinalizados(){
+  const q = (document.getElementById("fin-search")||{}).value || "";
+  const sort = (document.getElementById("fin-sort")||{}).value || "recente";
+
+  // Get all concluded rows
+  let fins = ALL_ROWS.filter(r => {
+    const m = META[rowId(r)] || {};
+    return m.done || m.myStatus === "Concluído" || m.myStatus === "Disputa Perdida";
+  });
+
+  // Tipo filter
+  const tipoFilter = (document.getElementById("fin-tipo-filter")||{}).value || "";
+  if(tipoFilter){
+    fins = fins.filter(r => {
+      const m2 = META[rowId(r)] || {};
+      const origSt2 = r["Status da Devolução / Reembolso"] || "";
+      return getConclusionTypeLabel(m2, origSt2) === tipoFilter;
+    });
+  }
+
+  // Search filter + dedup by rowId
+  if(q){
+    const ql = q.toLowerCase();
+    const seen = new Set();
+    fins = fins.filter(r => {
+      if(!(
+        String(r["ID da Devolução"]||"").toLowerCase().includes(ql) ||
+        String(r["ID do pedido"]||r["ID do Pedido"]||r["Nº do pedido"]||r["Número do Pedido"]||"").toLowerCase().includes(ql) ||
+        String(r["Nome do Produto"]||"").toLowerCase().includes(ql) ||
+        String(r["Nome de usuário (Comprador)"]||r["Comprador"]||"").toLowerCase().includes(ql) ||
+        String(r["Cidade"]||"").toLowerCase().includes(ql)
+      )) return false;
+      const id = rowId(r);
+      if(seen.has(id)) return false;
+      seen.add(id);
+      return true;
+    });
+  }
+
+  // Sort
+  fins.sort((a, b) => {
+    const ma = META[rowId(a)] || {}, mb = META[rowId(b)] || {};
+    if(sort === "recente") return (mb.concludedAt||"") > (ma.concludedAt||"") ? 1 : -1;
+    if(sort === "antigo") return (ma.concludedAt||"") > (mb.concludedAt||"") ? 1 : -1;
+    if(sort === "valor") return parseBRL(b["Quantia total de reembolsos"]) - parseBRL(a["Quantia total de reembolsos"]);
+    if(sort === "nome") return String(a["Nome do Produto"]||"").localeCompare(String(b["Nome do Produto"]||""));
+    return 0;
+  });
+
+  // Update badge
+  const totalFin = ALL_ROWS.filter(r => { const m=META[rowId(r)]||{}; return m.done||m.myStatus==="Concluído"||m.myStatus==="Disputa Perdida"; }).length;
+  const totalVal = fins.reduce((s,r) => s + parseBRL(r["Quantia total de reembolsos"]), 0);
+  const totalPago = fins.reduce((s,r) => s + parseBRL(r["Valor pago pelo comprador"]), 0);
+
+  const badge = document.getElementById("fin-total-badge");
+  if(badge) badge.textContent = `(${totalFin} pedidos)`;
+
+  // Stats row
+  const statsEl = document.getElementById("fin-stats-row");
+  if(statsEl) statsEl.innerHTML = [
+    {val: totalFin, lbl: "Total Concluídos"},
+    {val: fmt(totalVal), lbl: "Reembolsos"},
+    {val: fmt(totalPago), lbl: "Valor Pago"},
+    {val: ((totalFin / (ALL_ROWS.length||1)) * 100).toFixed(1) + "%", lbl: "do Total"},
+  ].map(s => `<div class="fin-stat"><div class="fin-stat-val">${s.val}</div><div class="fin-stat-lbl">${s.lbl}</div></div>`).join("");
+
+  // Pagination
+  const pages = Math.ceil(fins.length / FIN_PER) || 1;
+  if(FIN_PAGE >= pages) FIN_PAGE = 0;
+  const slice = fins.slice(FIN_PAGE * FIN_PER, (FIN_PAGE + 1) * FIN_PER);
+
+  const grid = document.getElementById("fin-grid");
+  if(!grid) return;
+
+  if(!fins.length){
+    grid.innerHTML = `<div class="fin-empty" style="grid-column:1/-1">
+      <div class="fin-empty-icon">🎯</div>
+      <div style="font-size:14px;font-weight:600;color:var(--text2);margin-bottom:6px">Nenhum pedido concluído ainda</div>
+      <div style="font-size:12px">Marque pedidos como "Concluído" na aba Registros para vê-los aqui</div>
+    </div>`;
+    document.getElementById("fin-pagination").innerHTML = "";
+    return;
+  }
+
+  grid.innerHTML = slice.map(r => {
+    const id = rowId(r);
+    const m = META[id] || {};
+    const concludedAt = m.concludedAt ? new Date(m.concludedAt).toLocaleString("pt-BR") : "—";
+    const produto = r["Nome do Produto"] || "—";
+    const variacao = r["Nome da variação"] || "";
+    const val = fmt(parseBRL(r["Quantia total de reembolsos"]));
+    const cidade = r["Cidade"] || "—";
+    const uf = r["UF"] || "";
+    const idDev = r["ID da Devolução"] || "—";
+    const motivo = shortMotivo(r["Motivo da Devolução"] || "");
+    const note = m.note || "";
+    const isMerged = r._mergedFrom;
+    const origSt = r["Status da Devolução / Reembolso"] || "";
+    const tipoBadge = getConclusionTypeBadgeHTML(m, origSt);
+
+    return `<div class="fin-card">
+      <div class="fin-card-id">
+        <span class="fin-check">✓</span>
+        <span>${idDev}</span>
+        ${isMerged ? '<span class="merge-tag new">+novo</span>' : ""}
+      </div>
+      ${tipoBadge}
+      <div class="fin-card-prod" title="${produto}">${produto}</div>
+      ${variacao ? `<div style="font-size:11px;color:var(--text3);margin-bottom:2px">${variacao}</div>` : ""}
+      <div class="fin-card-meta">
+        <span class="fin-card-val">${val}</span>
+        <span class="fin-card-date">📍 ${cidade}${uf?" / "+uf:""}</span>
+        <span class="fin-card-date">🔎 ${motivo}</span>
+      </div>
+      ${note ? `<div class="fin-note">📝 ${note}</div>` : ""}
+      <div class="fin-card-actions">
+        <span style="font-size:10px;color:var(--text3);font-family:var(--mono);flex:1">✅ ${concludedAt}</span>
+        <button class="btn btn-ghost btn-sm" onclick="reabrirPedido('${id}')">↩ Reabrir</button>
+        <button class="btn btn-ghost btn-sm" onclick="openDetail('${id}')">Ver</button>
+      </div>
+    </div>`;
+  }).join("");
+
+  // Pagination controls
+  const pagEl = document.getElementById("fin-pagination");
+  if(pagEl){
+    pagEl.innerHTML = pages <= 1 ? "" : `
+      <span class="tbl-count">${fins.length} pedidos</span>
+      <button class="pag-btn" onclick="finChangePage(-1)" ${FIN_PAGE===0?"disabled":""}>‹</button>
+      <span class="pag-info">${FIN_PAGE+1} / ${pages}</span>
+      <button class="pag-btn" onclick="finChangePage(1)" ${FIN_PAGE>=pages-1?"disabled":""}>›</button>
+    `;
+  }
+}
+
+function finChangePage(d){
+  const fins = ALL_ROWS.filter(r => { const m=META[rowId(r)]||{}; return m.done||m.myStatus==="Concluído"||m.myStatus==="Disputa Perdida"; });
+  const pages = Math.ceil(fins.length / FIN_PER) || 1;
+  FIN_PAGE = Math.max(0, Math.min(pages - 1, FIN_PAGE + d));
+  renderFinalizados();
+}
+
+function reabrirPedido(id){
+  if(!META[id]) META[id] = {};
+  META[id].done = false;
+  META[id].myStatus = "Pendente";
+  delete META[id].concludedAt;
+  scheduleSave();
+  updateProgress();
+  updateFinBadge();
+  updateAbBadge();
+  // Re-render abertos if active
+  if(document.getElementById("view-abertos")&&document.getElementById("view-abertos").style.display!=="none") renderAbertos();
+  updateAbBadge();
+  renderFinalizados();
+  toast("Pedido reaberto e movido para Em Aberto","info");
+  addLog(`Pedido <strong>${id.slice(0,20)}</strong> reaberto e movido de volta para Em Aberto`, C.yellow);
+}
+
+// ══════════════════════════════════════════════════════
+// EXPORT FINALIZADOS
+// ══════════════════════════════════════════════════════
+function exportFinalizados(){
+  const fins = ALL_ROWS.filter(r => { const m=META[rowId(r)]||{}; return m.done||m.myStatus==="Concluído"||m.myStatus==="Disputa Perdida"; });
+  if(!fins.length){ toast("Nenhum pedido concluído para exportar","warn"); return; }
+  const exported = fins.map(r => {
+    const id = rowId(r);
+    const m = META[id] || {};
+    return {
+      ...r,
+      "Meu Status": m.myStatus || "Concluído",
+      "Conferido": "Sim",
+      "Data Conclusão": m.concludedAt ? new Date(m.concludedAt).toLocaleString("pt-BR") : "",
+      "Anotação": m.note || ""
+    };
+  });
+  const wb = XLSX.utils.book_new();
+  const ws = XLSX.utils.json_to_sheet(exported);
+  XLSX.utils.book_append_sheet(wb, ws, "Finalizados");
+  XLSX.writeFile(wb, "pedidos_finalizados.xlsx");
+  toast(`${fins.length} pedidos finalizados exportados 🎉`, "success");
+}
+
+
+// ══════════════════════════════════════════════════════
+// PEDIDOS EM ABERTO
+// ══════════════════════════════════════════════════════
+let AB_PAGE = 0;
+const AB_PER = 24;
+let AB_STATUS_FILTER = "todos";
+
+// Priority mapping for each myStatus
+function abPriority(mySt){
+  if(mySt==="Em Andamento") return 1;
+  if(mySt==="Disputar") return 1;
+  if(mySt==="Aguardando Retorno") return 2;
+  if(mySt==="Em Análise") return 3;
+  if(mySt==="Reembolsado") return 4;
+  if(mySt==="Pendente" || !mySt) return 5;
+  if(mySt==="Cancelado") return 6;
+  return 7;
+}
+
+function abCardClass(mySt){
+  if(mySt==="Em Andamento") return "ab-card ab-priority-high";
+  if(mySt==="Disputar") return "ab-card ab-priority-high";
+  if(mySt==="Aguardando Retorno") return "ab-card ab-priority-med";
+  if(mySt==="Em Análise") return "ab-card ab-priority-blue";
+  if(mySt==="Reembolsado") return "ab-card ab-priority-purple";
+  if(mySt==="Cancelado") return "ab-card ab-priority-low";
+  return "ab-card ab-priority-low"; // Pendente
+}
+
+function updateAbBadge(){
+  const count = ALL_ROWS.filter(r => {
+    const m = META[rowId(r)] || {};
+    return !m.done && m.myStatus !== "Concluído" && m.myStatus !== "Disputa Perdida";
+  }).length;
+  const el = document.getElementById("nb-abertos");
+  if(el){ el.textContent = count; el.style.display = count > 0 ? "" : "none"; }
+}
+
+function renderAbertos(){
+  const q = (document.getElementById("ab-search")||{}).value || "";
+  const sort = (document.getElementById("ab-sort")||{}).value || "prioridade";
+
+  // All non-concluded rows
+  let abertos = ALL_ROWS.filter(r => {
+    const m = META[rowId(r)] || {};
+    return !m.done && m.myStatus !== "Concluído" && m.myStatus !== "Disputa Perdida";
+  });
+
+  // Status pill filter
+  if(AB_STATUS_FILTER !== "todos"){
+    abertos = abertos.filter(r => {
+      const m = META[rowId(r)] || {};
+      const mySt = m.myStatus || "Pendente";
+      return mySt === AB_STATUS_FILTER;
+    });
+  }
+
+  // Search filter
+  if(q){
+    const ql = q.toLowerCase();
+    abertos = abertos.filter(r =>
+      String(r["ID da Devolução"]||"").toLowerCase().includes(ql) ||
+      String(r["ID do pedido"]||r["ID do Pedido"]||r["Nº do pedido"]||r["Número do Pedido"]||"").toLowerCase().includes(ql) ||
+      String(r["Nome do Produto"]||"").toLowerCase().includes(ql) ||
+      String(r["Nome de usuário (Comprador)"]||r["Comprador"]||"").toLowerCase().includes(ql) ||
+      String(r["Cidade"]||"").toLowerCase().includes(ql) ||
+      String((META[rowId(r)]||{}).myStatus||"").toLowerCase().includes(ql)
+    );
+  }
+
+  // Sort
+  abertos.sort((a, b) => {
+    const ma = META[rowId(a)] || {}, mb = META[rowId(b)] || {};
+    if(sort === "prioridade") return abPriority(ma.myStatus) - abPriority(mb.myStatus);
+    if(sort === "recente") return String(b["Data de criação do pedido"]||"") > String(a["Data de criação do pedido"]||"") ? 1 : -1;
+    if(sort === "antigo") return String(a["Data de criação do pedido"]||"") > String(b["Data de criação do pedido"]||"") ? 1 : -1;
+    if(sort === "valor") return parseBRL(b["Quantia total de reembolsos"]) - parseBRL(a["Quantia total de reembolsos"]);
+    return 0;
+  });
+
+  // Total all abertos (ignoring filter for stats)
+  const allAbertos = ALL_ROWS.filter(r => { const m=META[rowId(r)]||{}; return !m.done && m.myStatus!=="Concluído"; });
+  const totalAb = allAbertos.length;
+  const totalVal = allAbertos.reduce((s,r)=>s+parseBRL(r["Quantia total de reembolsos"]),0);
+  const totalPago = allAbertos.reduce((s,r)=>s+parseBRL(r["Valor pago pelo comprador"]),0);
+
+  // Status breakdown for pills
+  const byStatus = {};
+  allAbertos.forEach(r => {
+    const m = META[rowId(r)] || {};
+    const k = m.myStatus || "Pendente";
+    byStatus[k] = (byStatus[k]||0) + 1;
+  });
+
+  // Update total badge
+  const badge = document.getElementById("ab-total-badge");
+  if(badge) badge.textContent = `(${totalAb} pedidos)`;
+
+  // Stats row
+  const statsEl = document.getElementById("ab-stats-row");
+  if(statsEl) statsEl.innerHTML = [
+    {val: totalAb, lbl: "Em Aberto", color: "var(--yellow)"},
+    {val: fmt(totalVal), lbl: "Reembolso Pendente", color: "var(--red)"},
+    {val: fmt(totalPago), lbl: "Valor em Jogo", color: "var(--blue)"},
+    {val: ((totalAb / (ALL_ROWS.length||1)) * 100).toFixed(1) + "%", lbl: "do Total", color: "var(--text)"},
+  ].map(s => `<div class="ab-stat"><div class="ab-stat-val" style="color:${s.color}">${s.val}</div><div class="ab-stat-lbl">${s.lbl}</div></div>`).join("");
+
+  // Render status pills
+  const pillColors = {
+    "Em Andamento":["#ff4820","#ff482018"],
+    "Disputar":["#ff6b9d","#ff6b9d18"],
+    "Aguardando Retorno":["#ff9548","#ff954818"],
+    "Em Análise":["#4db8ff","#4db8ff18"],
+    "Reembolsado":["#b388ff","#b388ff18"],
+    "Pendente":["#4a5578","#4a557818"],
+    "Cancelado":["#4a5578","#4a557810"],
+  };
+  const pillsEl = document.getElementById("ab-pills");
+  if(pillsEl){
+    const allPill = `<span class="ab-status-pill ${AB_STATUS_FILTER==="todos"?"active":""}"
+      style="color:var(--text);background:var(--s2);border-color:var(--border)"
+      onclick="setAbFilter('todos')">Todos (${totalAb})</span>`;
+    const statusPills = Object.entries(byStatus).sort((a,b)=>b[1]-a[1]).map(([st,cnt])=>{
+      const [col,bg] = pillColors[st] || ["#4a5578","#4a557818"];
+      const isUrgent = st === "Em Andamento" || st === "Disputar";
+      return `<span class="ab-status-pill ${AB_STATUS_FILTER===st?"active":""}"
+        style="color:${col};background:${bg};border-color:${col}44"
+        onclick="setAbFilter('${st}')">
+        ${isUrgent?'<span class="ab-urgent-dot"></span>':''}${st} (${cnt})
+      </span>`;
+    }).join("");
+    pillsEl.innerHTML = `<span style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:1px">Filtrar:</span>${allPill}${statusPills}`;
+  }
+
+  // Grid
+  const pages = Math.ceil(abertos.length / AB_PER) || 1;
+  if(AB_PAGE >= pages) AB_PAGE = 0;
+  const slice = abertos.slice(AB_PAGE * AB_PER, (AB_PAGE + 1) * AB_PER);
+  const grid = document.getElementById("ab-grid");
+  if(!grid) return;
+
+  if(!abertos.length && AB_STATUS_FILTER === "todos" && !q){
+    grid.innerHTML = `<div class="ab-empty">
+      <div class="ab-empty-icon">🎉</div>
+      <div style="font-size:15px;font-weight:700;color:var(--green);margin-bottom:6px">Nenhum pedido em aberto!</div>
+      <div style="font-size:12px">Todos os pedidos foram concluídos. Excelente trabalho!</div>
+    </div>`;
+    document.getElementById("ab-pagination").innerHTML = "";
+    return;
+  }
+
+  if(!abertos.length){
+    grid.innerHTML = `<div class="ab-empty">
+      <div class="ab-empty-icon">🔍</div>
+      <div style="font-size:14px;font-weight:600;color:var(--text2);margin-bottom:6px">Nenhum resultado encontrado</div>
+      <div style="font-size:12px">Tente outro filtro ou termo de busca</div>
+    </div>`;
+    document.getElementById("ab-pagination").innerHTML = "";
+    return;
+  }
+
+  grid.innerHTML = slice.map(r => {
+    const id = rowId(r);
+    const m = META[id] || {};
+    const mySt = m.myStatus || "Pendente";
+    const stColor = STATUS_COLORS[mySt] || C.gray;
+    const cardClass = abCardClass(mySt);
+    const produto = r["Nome do Produto"] || "—";
+    const variacao = r["Nome da variação"] || "";
+    const val = parseBRL(r["Quantia total de reembolsos"]);
+    const valPago = parseBRL(r["Valor pago pelo comprador"]);
+    const cidade = r["Cidade"] || "—";
+    const uf = r["UF"] || "";
+    const idDev = r["ID da Devolução"] || "—";
+    const motivo = shortMotivo(r["Motivo da Devolução"] || "");
+    const origSt = r["Status da Devolução / Reembolso"] || "";
+    const note = m.note || "";
+    const isMerged = r._mergedFrom;
+    const isUrgent = mySt === "Em Andamento";
+    const dataCriacao = fmtDate(r["Data de criação do pedido"]);
+    const opts = STATUS_OPTIONS.filter(s => s !== "Concluído").map(s =>
+      `<option value="${s}" ${s===mySt?"selected":""}>${s}</option>`
+    ).join("");
+
+    return `<div class="${cardClass}" id="ab-card-${id.replace(/\W/g,'_')}">
+      <div class="ab-card-id">
+        ${isUrgent ? '<span class="ab-urgent-dot"></span>' : ""}
+        <span>${idDev}</span>
+        ${isMerged ? '<span class="merge-tag new">+novo</span>' : ""}
+        <span class="badge" style="background:${stColor}18;color:${stColor};border:1px solid ${stColor}30;margin-left:auto">${mySt}</span>
+      </div>
+      <div class="ab-card-prod" title="${produto}">${produto}</div>
+      ${variacao ? `<div style="font-size:11px;color:var(--text3)">${variacao}</div>` : ""}
+      <div class="ab-card-meta">
+        <span class="ab-card-val" style="color:${val>0?'var(--red)':'var(--text3)'}">${fmt(val)}</span>
+        <span style="font-family:var(--mono);font-size:11px;color:var(--text3)">📍 ${cidade}${uf?" / "+uf:""}</span>
+        <span style="font-family:var(--mono);font-size:10px;color:var(--text3)">📅 ${dataCriacao}</span>
+        ${origSt ? `<span style="font-size:10px;color:var(--text3)">Shopee: ${origSt}</span>` : ""}
+      </div>
+      <div style="margin-top:8px;font-size:11px;color:var(--text3)">🔎 ${motivo}</div>
+      <div style="margin-top:6px">
+        <textarea class="card-note-input" placeholder="📝 Anotação…" rows="${note?2:1}"
+          style="width:100%;background:var(--s3);border:1px solid var(--border);color:var(--text2);border-radius:6px;padding:5px 8px;font-size:11px;font-family:var(--font);resize:none;outline:none;transition:border-color .15s"
+          onfocus="this.rows=3;this.style.borderColor='var(--shopee)'"
+          onblur="this.rows=this.value?2:1;this.style.borderColor='var(--border)'"
+          oninput="saveNote('${id}',this)"
+        >${note}</textarea>
+      </div>
+      <div class="ab-card-actions">
+        <select class="st-sel" style="background:${stColor}18;color:${stColor};border-color:${stColor}40;font-size:11px"
+          onchange="changeMyStatus('${id}',this)">
+          ${opts}
+        </select>
+        <button class="btn btn-green btn-sm" style="margin-left:auto" onclick="concludeFromAbertos('${id}')">✓ Concluir</button>
+        <button class="btn btn-ghost btn-sm" onclick="openDetail('${id}')">Ver</button>
+      </div>
+    </div>`;
+  }).join("");
+
+  // Pagination
+  const pagEl = document.getElementById("ab-pagination");
+  if(pagEl){
+    pagEl.innerHTML = pages <= 1 ? "" : `
+      <span class="tbl-count">${abertos.length} pedidos</span>
+      <button class="pag-btn" onclick="abChangePage(-1)" ${AB_PAGE===0?"disabled":""}>‹</button>
+      <span class="pag-info">${AB_PAGE+1} / ${pages}</span>
+      <button class="pag-btn" onclick="abChangePage(1)" ${AB_PAGE>=pages-1?"disabled":""}>›</button>
+    `;
+  }
+}
+
+function setAbFilter(status){
+  AB_STATUS_FILTER = status;
+  AB_PAGE = 0;
+  renderAbertos();
+}
+
+function abChangePage(d){
+  const abertos = ALL_ROWS.filter(r => { const m=META[rowId(r)]||{}; return !m.done && m.myStatus!=="Concluído"; });
+  const pages = Math.ceil(abertos.length / AB_PER) || 1;
+  AB_PAGE = Math.max(0, Math.min(pages - 1, AB_PAGE + d));
+  renderAbertos();
+}
+
+function concludeFromAbertos(id){
+  if(!META[id]) META[id] = {};
+  META[id].done = true;
+  META[id].myStatus = "Concluído";
+  if(!META[id].concludedAt) META[id].concludedAt = new Date().toISOString();
+  scheduleSave();
+  updateProgress();
+  updateFinBadge();
+  updateAbBadge();
+  // Re-render abertos if active
+  if(document.getElementById("view-abertos")&&document.getElementById("view-abertos").style.display!=="none") renderAbertos();
+  updateAbBadge();
+  renderAbertos();
+  // Animate card out
+  const card = document.getElementById("ab-card-" + id.replace(/\W/g,'_'));
+  if(card){ card.style.transition="all .4s"; card.style.opacity="0"; card.style.transform="scale(.9)"; }
+  addLog(`Pedido <strong>${id.slice(0,20)}</strong> concluído direto da aba Em Aberto`, C.green);
+  toast("✅ Pedido concluído e movido para Finalizados", "success");
+}
+
+function exportAbertos(){
+  const abertos = ALL_ROWS.filter(r => { const m=META[rowId(r)]||{}; return !m.done && m.myStatus!=="Concluído"; });
+  if(!abertos.length){ toast("Nenhum pedido em aberto","warn"); return; }
+  const exported = abertos.map(r => {
+    const id = rowId(r);
+    const m = META[id] || {};
+    return {...r, "Meu Status": m.myStatus||"Pendente", "Conferido":"Não", "Anotação": m.note||""};
+  });
+  const wb = XLSX.utils.book_new();
+  const ws = XLSX.utils.json_to_sheet(exported);
+  XLSX.utils.book_append_sheet(wb, ws, "Em Aberto");
+  XLSX.writeFile(wb, "pedidos_em_aberto.xlsx");
+  toast(`${abertos.length} pedidos exportados`, "success");
+}
+
+// ══════════════════════════════════════════════════════
+// MERGE / ANEXAR PEDIDOS
+// ══════════════════════════════════════════════════════
+document.getElementById("merge-file-input").addEventListener("change", function(e){
+  const file = e.target.files[0];
+  if (!file || !ACTIVE_SHEET_ID) return;
+  const reader = new FileReader();
+  reader.onload = function(ev){
+    try {
+      const wb = XLSX.read(ev.target.result, {type:"array"});
+      const ws = wb.Sheets[wb.SheetNames[0]];
+      const newData = XLSX.utils.sheet_to_json(ws, {defval:""});
+      if (!newData.length) { toast("Planilha vazia.","warn"); return; }
+
+      // Identify existing IDs
+      const existingIds = new Set(ALL_ROWS.map(r => rowId(r)));
+
+      // Separate new vs duplicates
+      const toAdd = [];
+      const duplicates = [];
+      newData.forEach(r => {
+        const id = rowId(r);
+        if (existingIds.has(id)) {
+          duplicates.push(r);
+        } else {
+          toAdd.push(r);
+        }
+      });
+
+      // Show preview modal
+      showMergePreview(file.name, newData.length, toAdd.length, duplicates.length, toAdd);
+    } catch(err) {
+      toast("Erro ao ler arquivo: " + safeErr(err), "warn");
+    }
+  };
+  reader.readAsArrayBuffer(file);
+  e.target.value = "";
+});
+
+function showMergePreview(fileName, total, newCount, dupCount, toAdd){
+  PENDING_MERGE={toAdd, fn:fileName};
+  const hasDups = dupCount > 0;
+  document.getElementById("modal-content").innerHTML = `
+    <div class="modal-title">🔗 Anexar Pedidos à Planilha Atual <button class="modal-close" onclick="closeModal()">✕</button></div>
+    <div style="margin-bottom:20px">
+      <div class="merge-preview-row">
+        <div class="merge-preview-icon">📄</div>
+        <div class="merge-preview-info">
+          <div class="merge-preview-name">${fileName}</div>
+          <div class="merge-preview-meta">${total} pedidos no arquivo enviado</div>
+        </div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:14px">
+        <div style="background:var(--s2);border:1px solid #00e5a030;border-radius:10px;padding:14px;text-align:center">
+          <div style="font-family:var(--mono);font-size:28px;font-weight:700;color:var(--green)">${newCount}</div>
+          <div style="font-size:11px;color:var(--text3);margin-top:4px">Pedidos novos a adicionar</div>
+        </div>
+        <div style="background:var(--s2);border:1px solid ${hasDups?'#ffc54030':'var(--border)'};border-radius:10px;padding:14px;text-align:center">
+          <div style="font-family:var(--mono);font-size:28px;font-weight:700;color:${hasDups?'var(--yellow)':'var(--text3)'}">${dupCount}</div>
+          <div style="font-size:11px;color:var(--text3);margin-top:4px">Duplicatas (já existem — ignoradas)</div>
+        </div>
+      </div>
+      ${hasDups ? `<div style="margin-top:12px;padding:10px 14px;border-radius:8px;background:#ffc54010;border:1px solid #ffc54030;font-size:12px;color:var(--yellow)">
+        ⚠️ ${dupCount} pedido${dupCount>1?"s já existem":"já existe"} na base e será${dupCount>1?"ão":""} ignorado${dupCount>1?"s":""} para não duplicar dados.
+      </div>` : ''}
+      ${newCount === 0 ? `<div style="margin-top:12px;padding:10px 14px;border-radius:8px;background:#ff4d6d10;border:1px solid #ff4d6d30;font-size:12px;color:var(--red)">
+        ❌ Nenhum pedido novo encontrado. Todos já existem na base.
+      </div>` : ''}
+    </div>
+    ${newCount > 0 ? `
+    <div style="font-size:11px;color:var(--text3);margin-bottom:14px">
+      Todos os status, marcações e edições existentes serão <strong style="color:var(--green)">preservados integralmente</strong>. Os novos pedidos serão adicionados com status "Pendente".
+    </div>
+    <div style="display:flex;gap:8px;justify-content:flex-end">
+      <button class="btn btn-ghost" onclick="closeModal()">Cancelar</button>
+      <button class="btn btn-primary" onclick="confirmMerge()">✅ Confirmar Mesclagem (${newCount} pedidos)</button>
+    </div>` : `
+    <div style="display:flex;justify-content:flex-end">
+      <button class="btn btn-ghost" onclick="closeModal()">Fechar</button>
+    </div>`}
+  `;
+  document.getElementById("modal-overlay").classList.add("open");
+}
+
+async function confirmMerge(){
+  if(!PENDING_MERGE||!PENDING_MERGE.toAdd.length||!ACTIVE_SHEET_ID) return;
+  const toAdd=PENDING_MERGE.toAdd, mfn=PENDING_MERGE.fn||"";
+  PENDING_MERGE=null;
+  closeModal();
+
+  // Tag new rows with merge source
+  const taggedNew = toAdd.map(r => ({...r, _mergedFrom: mfn, _mergedAt: new Date().toISOString()}));
+  // Merge rows preserving all existing data + meta intact
+  const merged = [...ALL_ROWS, ...taggedNew];
+
+  // Update sheet in localStorage with merged data
+  const sheets = LS.getSheets();
+  const idx = sheets.findIndex(s => s.id === ACTIVE_SHEET_ID);
+  if (idx === -1) return;
+
+  const activeSheet = sheets[idx];
+  activeSheet.data = merged;
+  activeSheet.count = merged.length;
+  activeSheet.lastMerged = new Date().toISOString();
+  activeSheet.mergeCount = (activeSheet.mergeCount || 0) + 1;
+  sheets[idx] = activeSheet;
+  LS.saveSheets(sheets);
+
+  // Update in-memory state — META stays completely untouched
+  ALL_ROWS = merged;
+
+  // Refresh UI
+  document.getElementById("hdr-meta").textContent = `${activeSheet.name} · ${merged.length} registros`;
+  document.getElementById("nb-total").textContent = merged.length;
+  buildDashboard();
+  populateFilters();
+  applyFilters();
+  renderSheetsList();
+  updateProgress();
+  updateFinBadge();
+  updateAbBadge();
+  // Re-render abertos if active
+  if(document.getElementById("view-abertos")&&document.getElementById("view-abertos").style.display!=="none") renderAbertos();
+
+  // Log
+  const logMsg = `<strong>${toAdd.length}</strong> pedidos anexados de nova planilha. Total: <strong>${merged.length}</strong>`;
+  addLog(logMsg, C.green);
+
+  toast(`🔗 ${toAdd.length} pedidos adicionados com sucesso! Total: ${merged.length}`, "success", 5000);
+}
+
+
+
+// ══════════════════════════════════════════════════════
+// VERSION & UPDATE SYSTEM
+// ══════════════════════════════════════════════════════
+const APP_VERSION = "3.0.0";
+
+// CHANGELOG — each version lists what changed
+const CHANGELOG = {
+  "1.0.0": {
+    date: "2026-05-06",
+    title: "Versão inicial",
+    items: [
+      { icon: "📦", text: "<strong>Dashboard completo</strong> de controle de devoluções Shopee" },
+      { icon: "📊", text: "<strong>Visão geral</strong> com KPIs, gráficos de motivos e soluções" },
+      { icon: "📋", text: "<strong>Status & Motivos</strong> com detalhes financeiros por status" },
+      { icon: "🗺️", text: "<strong>Regiões</strong> — ranking de estados e cidades" },
+      { icon: "📦", text: "<strong>Registros</strong> com busca, filtros e edição inline de status" },
+      { icon: "✅", text: "<strong>Pedidos Finalizados</strong> — área organizada de pedidos concluídos" },
+      { icon: "🔓", text: "<strong>Pedidos em Aberto</strong> — visualização rápida com prioridades" },
+      { icon: "🎯", text: "<strong>Barra de progresso</strong> inteligente em tempo real" },
+      { icon: "🔗", text: "<strong>Anexar planilhas</strong> sem perder dados existentes" },
+      { icon: "💾", text: "<strong>Auto-save</strong> com persistência total no navegador" },
+      { icon: "⬇", text: "<strong>Exportação</strong> de finalizados, em aberto e planilha completa" },
+    ]
+  }
+};
+
+// Version storage helpers
+const VS = {
+  getCurrent: () => localStorage.getItem("dev_app_version") || null,
+  setCurrent: v => localStorage.setItem("dev_app_version", v),
+  getDismissed: () => localStorage.getItem("dev_dismissed_version") || null,
+  setDismissed: v => localStorage.setItem("dev_dismissed_version", v),
+  getBackups: () => JSON.parse(localStorage.getItem("dev_backups") || "[]"),
+  saveBackups: d => localStorage.setItem("dev_backups", JSON.stringify(d)),
+  getPrefs: () => JSON.parse(localStorage.getItem("dev_prefs") || "{}"),
+  savePrefs: d => localStorage.setItem("dev_prefs", JSON.stringify(d)),
+};
+
+// Semantic version compare: returns 1 if a > b, -1 if a < b, 0 if equal
+function versionCompare(a, b){
+  const pa = a.split(".").map(Number);
+  const pb = b.split(".").map(Number);
+  for(let i = 0; i < 3; i++){
+    if((pa[i]||0) > (pb[i]||0)) return 1;
+    if((pa[i]||0) < (pb[i]||0)) return -1;
+  }
+  return 0;
+}
+
+function initVersionSystem(){
+  const stored = VS.getCurrent();
+  const dismissed = VS.getDismissed();
+
+  // Update version badge
+  const badge = document.getElementById("ver-badge");
+  if(badge) badge.textContent = "v" + APP_VERSION;
+
+  if(!stored){
+    // First time — just set version, no update needed
+    VS.setCurrent(APP_VERSION);
+    return;
+  }
+
+  const isNewer = versionCompare(APP_VERSION, stored) > 0;
+  const wasDismissed = dismissed === APP_VERSION;
+
+  if(isNewer && !wasDismissed){
+    // Show update banner
+    showUpdateBanner(stored, APP_VERSION);
+  }
+}
+
+function showUpdateBanner(fromVer, toVer){
+  const banner = document.getElementById("update-banner");
+  const newVerEl = document.getElementById("upd-new-ver");
+  const descEl = document.getElementById("upd-desc");
+  if(!banner) return;
+
+  if(newVerEl) newVerEl.textContent = "v" + toVer;
+
+  // Build changelog summary for description
+  const log = CHANGELOG[toVer];
+  if(descEl && log){
+    const count = log.items.length;
+    descEl.innerHTML = `Versão <strong>v${toVer}</strong> disponível com <strong>${count} novos recursos</strong>. Todos os seus dados, pedidos e configurações serão preservados integralmente.`;
+  }
+
+  banner.classList.add("show");
+
+  // Pulse the version badge
+  const badge = document.getElementById("ver-badge");
+  if(badge) badge.classList.add("has-update");
+}
+
+function dismissUpdate(){
+  VS.setDismissed(APP_VERSION);
+  const banner = document.getElementById("update-banner");
+  if(banner){ banner.style.animation="none"; banner.style.opacity="0"; banner.style.transform="translateY(-8px)"; banner.style.transition="all .3s"; setTimeout(()=>banner.classList.remove("show"),300); }
+}
+
+// ── BACKUP SYSTEM ──────────────────────────────────────
+function createBackup(reason){
+  const sheets = LS.getSheets();
+  if(!sheets.length) return null;
+
+  const backupId = "bkp_" + Date.now();
+  const snapshot = {
+    id: backupId,
+    reason,
+    timestamp: new Date().toISOString(),
+    version: VS.getCurrent() || APP_VERSION,
+    sheets: sheets.map(s => ({ id: s.id, name: s.name, date: s.date, count: s.count })),
+    // Store meta for each sheet
+    metas: sheets.reduce((acc, s) => {
+      acc[s.id] = LS.getMeta(s.id);
+      return acc;
+    }, {}),
+    // Don't store raw sheet data in backup (too large) — only meta & structure
+    activeSheetId: ACTIVE_SHEET_ID,
+  };
+
+  let backups = VS.getBackups();
+  backups.unshift(snapshot);
+  backups = backups.slice(0, 5); // keep last 5 backups
+  VS.saveBackups(backups);
+
+  // Also save full meta snapshot keyed by backupId
+  localStorage.setItem("dev_backup_metas_" + backupId, JSON.stringify(snapshot.metas));
+
+  return backupId;
+}
+
+function restoreBackup(backupId){
+  const backups = VS.getBackups();
+  const bkp = backups.find(b => b.id === backupId);
+  if(!bkp){ toast("Backup não encontrado","warn"); return false; }
+
+  const metas = JSON.parse(localStorage.getItem("dev_backup_metas_" + backupId) || "{}");
+  Object.entries(metas).forEach(([sheetId, meta]) => {
+    LS.saveMeta(sheetId, meta);
+  });
+
+  toast("Backup restaurado com sucesso","success");
+  if(ACTIVE_SHEET_ID) loadSheet(ACTIVE_SHEET_ID);
+  return true;
+}
+
+// ── UPDATE PROCESS ──────────────────────────────────────
+function startUpdate(){
+  const fromVer = VS.getCurrent() || "—";
+  const log = CHANGELOG[APP_VERSION] || { items: [], title: "Atualização" };
+
+  document.getElementById("modal-content").innerHTML = `
+    <div class="modal-title">🚀 Atualizar Dashboard <button class="modal-close" onclick="closeModal()">✕</button></div>
+
+    <div style="display:flex;gap:8px;align-items:center;margin-bottom:16px">
+      <span style="font-family:var(--mono);font-size:12px;padding:3px 10px;border-radius:10px;background:var(--s3);color:var(--text3)">v${fromVer}</span>
+      <span style="color:var(--text3)">→</span>
+      <span style="font-family:var(--mono);font-size:12px;padding:3px 10px;border-radius:10px;background:#ffc54018;color:var(--yellow);border:1px solid #ffc54030">v${APP_VERSION}</span>
+      <span style="font-size:11px;color:var(--text3);margin-left:auto">${log.date || ""}</span>
+    </div>
+
+    <div style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:1px;margin-bottom:8px">O que há de novo</div>
+    <div class="upd-changelog">
+      ${log.items.map(i => `<div class="upd-cl-item"><span class="upd-cl-icon">${i.icon}</span><span class="upd-cl-text">${i.text}</span></div>`).join("")}
+    </div>
+
+    <div class="upd-progress-wrap" id="upd-progress-wrap" style="display:none">
+      <div class="upd-step" id="upd-step">Preparando…</div>
+      <div class="upd-progress-bar"><div class="upd-progress-fill" id="upd-fill"></div></div>
+    </div>
+    <div id="upd-result"></div>
+
+    <div style="background:#00e5a00d;border:1px solid #00e5a025;border-radius:8px;padding:10px 14px;font-size:12px;color:var(--text2);margin-bottom:16px">
+      🛡️ <strong style="color:var(--green)">Seus dados estão seguros.</strong> Um backup automático será criado antes da atualização. Nenhum pedido, status ou configuração será alterado.
+    </div>
+
+    <div style="display:flex;gap:8px;justify-content:flex-end" id="upd-btn-row">
+      <button class="btn btn-ghost" onclick="closeModal()">Cancelar</button>
+      <button class="btn-update" onclick="executeUpdate()">⬆ Confirmar Atualização</button>
+    </div>
+  `;
+  document.getElementById("modal-overlay").classList.add("open");
+}
+
+async function executeUpdate(){
+  const steps = [
+    { label: "Criando backup dos seus dados…", pct: 15, fn: () => createBackup("pre-update-" + APP_VERSION) },
+    { label: "Verificando compatibilidade de dados…", pct: 35, fn: () => verifyDataIntegrity() },
+    { label: "Aplicando novos recursos…", pct: 65, fn: () => applyUpdatePatches() },
+    { label: "Salvando nova versão…", pct: 85, fn: () => VS.setCurrent(APP_VERSION) },
+    { label: "Finalizando e recarregando…", pct: 100, fn: () => true },
+  ];
+
+  // Hide buttons, show progress
+  const btnRow = document.getElementById("upd-btn-row");
+  if(btnRow) btnRow.style.display = "none";
+  const pw = document.getElementById("upd-progress-wrap");
+  if(pw) pw.style.display = "block";
+
+  let backupId = null;
+
+  try {
+    for(const step of steps){
+      document.getElementById("upd-step").textContent = step.label;
+      document.getElementById("upd-fill").style.width = step.pct + "%";
+      await new Promise(r => setTimeout(r, 380));
+      const result = step.fn();
+      if(step.pct === 15 && result) backupId = result;
+    }
+
+    // Success
+    document.getElementById("upd-result").innerHTML = `
+      <div class="upd-result success">
+        ✅ Atualização para <strong>v${APP_VERSION}</strong> concluída com sucesso!
+        ${backupId ? `<div style="margin-top:4px;font-size:10px;opacity:.7">Backup criado: ${backupId}</div>` : ""}
+      </div>`;
+
+    // Update badge
+    const badge = document.getElementById("ver-badge");
+    if(badge){ badge.textContent = "v" + APP_VERSION; badge.classList.remove("has-update"); }
+
+    // Dismiss banner
+    dismissUpdate();
+
+    // Reload dashboard data to apply any patches
+    if(ACTIVE_SHEET_ID) loadSheet(ACTIVE_SHEET_ID);
+
+    // Auto close after 2.5s
+    setTimeout(() => closeModal(), 2500);
+    toast("🚀 Dashboard atualizado para v" + APP_VERSION, "success", 5000);
+    addLog(`Dashboard atualizado para <strong>v${APP_VERSION}</strong>`, "#ffc540");
+
+  } catch(err){
+    // Rollback
+    document.getElementById("upd-step").textContent = "Erro detectado — restaurando backup…";
+    document.getElementById("upd-fill").style.background = "var(--red)";
+    if(backupId) restoreBackup(backupId);
+
+    document.getElementById("upd-result").innerHTML = `
+      <div class="upd-result error">
+        ❌ Erro na atualização: ${safeErr(err)}
+        ${backupId ? "<div style='margin-top:4px'>✅ Seus dados foram restaurados automaticamente do backup.</div>" : ""}
+      </div>`;
+
+    document.getElementById("upd-btn-row").style.display = "flex";
+    toast("Erro na atualização — dados restaurados", "warn");
+  }
+}
+
+function verifyDataIntegrity(){
+  // Check that all sheets are accessible
+  const sheets = LS.getSheets();
+  sheets.forEach(s => {
+    if(!s.id || !s.name) throw new Error("Sheet data corrupted: " + JSON.stringify(s));
+  });
+  return true;
+}
+
+function applyUpdatePatches(){
+  // PATCH REGISTRY — runs each patch only once, tracked by patch ID
+  const prefs = VS.getPrefs();
+  const applied = prefs.appliedPatches || [];
+
+  const patches = [
+    {
+      id: "patch_1_0_0_init",
+      desc: "Inicialização do sistema de versões",
+      fn: () => {
+        // Mark all existing sheets as compatible
+        const sheets = LS.getSheets();
+        sheets.forEach(s => { if(!s.schemaVersion) s.schemaVersion = "1.0.0"; });
+        LS.saveSheets(sheets);
+      }
+    },
+    // Future patches go here — they will run only once per install
+    // {
+    //   id: "patch_1_1_0_new_feature",
+    //   desc: "Inicializa campo X em todos os metadados",
+    //   fn: () => { ... }
+    // }
+  ];
+
+  patches.forEach(patch => {
+    if(!applied.includes(patch.id)){
+      patch.fn();
+      applied.push(patch.id);
+    }
+  });
+
+  prefs.appliedPatches = applied;
+  VS.savePrefs(prefs);
+  return true;
+}
+
+// ── VERSION INFO MODAL ──────────────────────────────────
+function openVersionInfo(){
+  const backups = VS.getBackups();
+  const stored = VS.getCurrent() || "—";
+  const prefs = VS.getPrefs();
+  const patches = (prefs.appliedPatches || []).length;
+  const sheets = LS.getSheets();
+  const cap = getStorageCapacity();
+  const totalMeta = sheets.reduce((s, sh) => {
+    const m = LS.getMeta(sh.id);
+    return s + Object.keys(m).length;
+  }, 0);
+
+  document.getElementById("modal-content").innerHTML = `
+    <div class="modal-title">ℹ️ Informações do Sistema <button class="modal-close" onclick="closeModal()">✕</button></div>
+
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:20px">
+      ${[
+        ["Versão Atual", "v" + APP_VERSION, "#ffc540"],
+        ["Instalada", "v" + stored, "var(--text2)"],
+        ["Patches aplicados", patches, "var(--blue)"],
+        ["Planilhas salvas", sheets.length, "var(--shopee)"],
+        ["Registros com meta", totalMeta, "var(--green)"],
+        ["Armazenamento", cap.usage+"MB/5MB ("+cap.pct+"%)", parseFloat(cap.pct)>70?"#ff4d6d":parseFloat(cap.pct)>40?"#ffc540":"#00e5a0"],
+        ["Backups disponíveis", backups.length + "/5", "var(--purple)"],
+      ].map(([k,v,c]) => `
+        <div style="background:var(--s2);border:1px solid var(--border);border-radius:8px;padding:10px 14px">
+          <div style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:1px">${k}</div>
+          <div style="font-family:var(--mono);font-size:16px;font-weight:700;color:${c};margin-top:3px">${v}</div>
+        </div>`).join("")}
+    </div>
+
+    ${backups.length > 0 ? `
+    <div style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:1px;margin-bottom:8px">Backups Disponíveis</div>
+    <div style="display:flex;flex-direction:column;gap:6px;margin-bottom:16px">
+      ${backups.map(b => `
+        <div class="backup-row">
+          <div class="backup-dot" style="background:var(--green)"></div>
+          <div style="flex:1">
+            <div style="font-size:12px;font-weight:600;color:var(--text)">${b.reason}</div>
+            <div style="font-size:10px;color:var(--text3);font-family:var(--mono)">${new Date(b.timestamp).toLocaleString("pt-BR")} · v${b.version} · ${b.sheets.length} planilha(s)</div>
+          </div>
+          <button class="btn btn-ghost btn-sm" onclick="confirmRestore('${b.id}')">↩ Restaurar</button>
+        </div>`).join("")}
+    </div>` : ""}
+
+    <div style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:1px;margin-bottom:8px">Histórico de Versões</div>
+    <div class="upd-changelog">
+      ${Object.entries(CHANGELOG).reverse().map(([ver, log]) => `
+        <div style="padding:10px 12px;background:var(--s2);border-radius:8px">
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+            <span style="font-family:var(--mono);font-size:11px;padding:2px 8px;border-radius:8px;background:#ffc54018;color:var(--yellow);border:1px solid #ffc54030">v${ver}</span>
+            <span style="font-size:11px;color:var(--text3)">${log.date}</span>
+            <span style="font-size:11px;font-weight:600;color:var(--text);margin-left:4px">${log.title}</span>
+          </div>
+          ${log.items.slice(0,4).map(i => `<div style="font-size:11px;color:var(--text3);padding:2px 0">• ${i.text.replace(/<[^>]+>/g,'')}</div>`).join("")}
+          ${log.items.length > 4 ? `<div style="font-size:10px;color:var(--text3);margin-top:4px">+${log.items.length-4} mais…</div>` : ""}
+        </div>`).join("")}
+    </div>
+
+    <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px">
+      <button class="btn btn-ghost" onclick="manualBackup()">💾 Criar Backup Manual</button>
+      <button class="btn btn-ghost" onclick="closeModal()">Fechar</button>
+    </div>
+  `;
+  document.getElementById("modal-overlay").classList.add("open");
+}
+
+function confirmRestore(backupId){
+  const backups = VS.getBackups();
+  const bkp = backups.find(b => b.id === backupId);
+  if(!bkp) return;
+  document.getElementById("modal-content").innerHTML = `
+    <div class="modal-title" style="color:var(--yellow)">↩ Restaurar Backup <button class="modal-close" onclick="openVersionInfo()">✕</button></div>
+    <div style="background:#ffc54010;border:1px solid #ffc54030;border-radius:10px;padding:14px;margin-bottom:16px">
+      <div style="font-size:13px;font-weight:600;color:var(--text)">${bkp.reason}</div>
+      <div style="font-size:11px;color:var(--text3);margin-top:4px;font-family:var(--mono)">${new Date(bkp.timestamp).toLocaleString("pt-BR")} · v${bkp.version}</div>
+    </div>
+    <p style="font-size:13px;color:var(--text2);line-height:1.6;margin-bottom:16px">
+      Restaurar este backup irá <strong style="color:var(--yellow)">reverter os status e marcações</strong> de todos os pedidos para o estado salvo nesta data. Os dados brutos das planilhas não serão alterados.
+    </p>
+    <div style="display:flex;gap:8px;justify-content:flex-end">
+      <button class="btn btn-ghost" onclick="openVersionInfo()">Cancelar</button>
+      <button class="btn" style="background:var(--yellow);color:#000;font-weight:700" onclick="restoreBackup('${backupId}');closeModal();toast('Backup restaurado com sucesso','success')">↩ Confirmar Restauração</button>
+    </div>
+  `;
+}
+
+function manualBackup(){
+  const id = createBackup("backup-manual-" + new Date().toLocaleDateString("pt-BR").replace(/\//g,"-"));
+  if(id){
+    toast("💾 Backup criado com sucesso","success");
+    openVersionInfo(); // refresh to show new backup
+  } else {
+    toast("Nenhuma planilha para fazer backup","warn");
+  }
+}
+
+
+// ══════════════════════════════════════════════════════
+// IMPROVEMENT: PERIOD FILTERS
+// ══════════════════════════════════════════════════════
+let AB_PERIOD_DAYS = 0;
+let FIN_PERIOD_DAYS = 0;
+
+function setAbPeriod(days, btn){
+  AB_PERIOD_DAYS = days;
+  document.querySelectorAll("#ab-period-bar .period-btn").forEach(b => b.classList.remove("active"));
+  if(btn) btn.classList.add("active");
+  AB_PAGE = 0;
+  renderAbertos();
+}
+
+function setFinPeriod(days, btn){
+  FIN_PERIOD_DAYS = days;
+  document.querySelectorAll("#fin-period-bar .period-btn").forEach(b => b.classList.remove("active"));
+  if(btn) btn.classList.add("active");
+  FIN_PAGE = 0;
+  renderFinalizados();
+}
+
+function filterByPeriod(rows, days, dateField){
+  if(!days) return rows;
+  const cutoff = new Date();
+  cutoff.setDate(cutoff.getDate() - days);
+  return rows.filter(r => {
+    const d = new Date(r[dateField] || r["Data de criação do pedido"] || "");
+    return !isNaN(d) && d >= cutoff;
+  });
+}
+
+// ══════════════════════════════════════════════════════
+// IMPROVEMENT: META GOAL
+// ══════════════════════════════════════════════════════
+function updateGoal(){
+  if(!ALL_ROWS.length) return;
+  const goalInput = document.getElementById("goal-input");
+  const goalPct = parseFloat((goalInput||{}).value || 90);
+  const total = ALL_ROWS.length;
+  const concluidos = ALL_ROWS.filter(r => { const m=META[rowId(r)]||{}; return m.done||m.myStatus==="Concluído"||m.myStatus==="Disputa Perdida"; }).length;
+  const currentPct = (concluidos / total) * 100;
+  const progress = Math.min((currentPct / goalPct) * 100, 100);
+  const fill = document.getElementById("goal-fill");
+  const lbl = document.getElementById("goal-pct-lbl");
+  if(fill){
+    fill.style.width = progress.toFixed(1) + "%";
+    fill.style.background = progress >= 100 ? "var(--green)" : progress >= 70 ? "linear-gradient(90deg,var(--yellow),var(--green))" : "linear-gradient(90deg,var(--shopee),var(--yellow))";
+  }
+  if(lbl) lbl.textContent = `${currentPct.toFixed(1)}% de ${goalPct}% — ${concluidos}/${total}`;
+}
+
+// ══════════════════════════════════════════════════════
+// IMPROVEMENT: DAYS OPEN COUNTER
+// ══════════════════════════════════════════════════════
+function daysOpenBadge(r){
+  const d = new Date(r["Data de criação do pedido"] || r["Data de criação da devolução"] || "");
+  if(isNaN(d)) return "";
+  const days = Math.floor((Date.now() - d) / 86400000);
+  if(days <= 7) return `<span class="days-badge days-ok">✓ ${days}d</span>`;
+  if(days <= 14) return `<span class="days-badge days-warn">⚠ ${days}d</span>`;
+  return `<span class="days-badge days-danger">🔴 ${days}d</span>`;
+}
+
+// ══════════════════════════════════════════════════════
+// IMPROVEMENT: TOP PRODUTOS VIEW
+// ══════════════════════════════════════════════════════
+function renderProdutos(){
+  const filter = (document.getElementById("prod-filter")||{}).value || "todos";
+  let rows = ALL_ROWS;
+  if(filter === "abertos") rows = rows.filter(r => { const m=META[rowId(r)]||{}; return !m.done&&m.myStatus!=="Concluído"&&m.myStatus!=="Disputa Perdida"; });
+  if(filter === "finalizados") rows = rows.filter(r => { const m=META[rowId(r)]||{}; return m.done||m.myStatus==="Concluído"||m.myStatus==="Disputa Perdida"; });
+
+  // Count by product name
+  const byProd = {}, byProdVal = {}, byProdMotivo = {};
+  rows.forEach(r => {
+    const p = (r["Nome do Produto"]||"Desconhecido").slice(0,60);
+    byProd[p] = (byProd[p]||0) + 1;
+    byProdVal[p] = (byProdVal[p]||0) + parseBRL(r["Quantia total de reembolsos"]);
+    const mo = shortMotivo(r["Motivo da Devolução"]||"");
+    if(!byProdMotivo[p]) byProdMotivo[p] = {};
+    byProdMotivo[p][mo] = (byProdMotivo[p][mo]||0) + 1;
+  });
+
+  const sorted = Object.entries(byProd).sort((a,b) => b[1]-a[1]);
+  const top20 = sorted.slice(0, 20);
+  const maxCount = top20[0]?.[1] || 1;
+
+  const listEl = document.getElementById("prod-list");
+  if(listEl) listEl.innerHTML = top20.length ? top20.map(([name,count], i) => `
+    <div class="prod-row">
+      <div class="prod-rank">${i+1}</div>
+      <div class="prod-name" title="${name}">${name}</div>
+      <div class="prod-bar-wrap"><div class="prod-bar" style="width:${(count/maxCount*100).toFixed(1)}%"></div></div>
+      <div class="prod-count">${count}x</div>
+      <div style="font-family:var(--mono);font-size:11px;color:var(--text3);width:80px;text-align:right;flex-shrink:0">${fmt(byProdVal[name]||0)}</div>
+    </div>`).join("") : '<div style="padding:30px;text-align:center;color:var(--text3)">Nenhum produto encontrado</div>';
+
+  // Top 5 most common motivos
+  const motivoEl = document.getElementById("prod-motivos");
+  if(motivoEl){
+    const allMotivos = {};
+    rows.forEach(r => { const m=shortMotivo(r["Motivo da Devolução"]||""); allMotivos[m]=(allMotivos[m]||0)+1; });
+    const sortedM = Object.entries(allMotivos).sort((a,b)=>b[1]-a[1]).slice(0,8);
+    const maxM = sortedM[0]?.[1]||1;
+    motivoEl.innerHTML = sortedM.map(([k,v]) => `<div class="hbar-row"><div class="hbar-label">${k}</div><div class="hbar-track"><div class="hbar-fill" style="width:${(v/maxM*100).toFixed(1)}%;background:var(--shopee)"></div></div><div class="hbar-n">${v}</div></div>`).join("");
+  }
+
+  // Top 5 by value
+  const valEl = document.getElementById("prod-valores");
+  if(valEl){
+    const top5val = Object.entries(byProdVal).sort((a,b)=>b[1]-a[1]).slice(0,8);
+    const maxV = top5val[0]?.[1]||1;
+    valEl.innerHTML = top5val.map(([k,v]) => `<div class="hbar-row"><div class="hbar-label" title="${k}">${k.slice(0,25)}…</div><div class="hbar-track"><div class="hbar-fill" style="width:${(v/maxV*100).toFixed(1)}%;background:var(--red)"></div></div><div class="hbar-n" style="font-size:10px">${fmt(v)}</div></div>`).join("");
+  }
+}
+
+// ══════════════════════════════════════════════════════
+// IMPROVEMENT: COMPARATIVO VIEW
+// ══════════════════════════════════════════════════════
+function initCompare(){
+  const sheets = LS.getSheets();
+  const noEl = document.getElementById("cmp-no-sheets");
+  const cmpEl = document.getElementById("cmp-content");
+  if(sheets.length < 2){
+    if(noEl) noEl.style.display = "block";
+    if(cmpEl) cmpEl.style.display = "none";
+    return;
+  }
+  if(noEl) noEl.style.display = "none";
+  if(cmpEl) cmpEl.style.display = "block";
+  const selA = document.getElementById("cmp-a");
+  const selB = document.getElementById("cmp-b");
+  if(!selA||!selB) return;
+  const opts = sheets.map(s => `<option value="${s.id}">${s.name} (${new Date(s.date).toLocaleDateString("pt-BR")} · ${s.count}reg)</option>`).join("");
+  selA.innerHTML = opts;
+  selB.innerHTML = opts;
+  if(sheets[1]) selB.value = sheets[1].id;
+  renderCompare();
+}
+
+function renderCompare(){
+  const sheets = LS.getSheets();
+  const idA = (document.getElementById("cmp-a")||{}).value;
+  const idB = (document.getElementById("cmp-b")||{}).value;
+  const shA = sheets.find(s=>s.id===idA);
+  const shB = sheets.find(s=>s.id===idB);
+  if(!shA||!shB){ document.getElementById("cmp-grid").innerHTML = '<div style="color:var(--text3);font-size:13px;padding:20px">Selecione duas planilhas para comparar.</div>'; return; }
+
+  const metaA = LS.getMeta(idA), metaB = LS.getMeta(idB);
+  const stA = computeStatsForRows(shA.data, metaA);
+  const stB = computeStatsForRows(shB.data, metaB);
+
+  const diff = (a, b, invert=false) => {
+    if(typeof a === "number" && typeof b === "number"){
+      const d = a - b;
+      if(d === 0) return '<span style="color:var(--text3)">—</span>';
+      const better = invert ? d < 0 : d > 0;
+      return `<span class="${better?"cmp-diff-pos":"cmp-diff-neg"}">${d>0?"+":""}${typeof a==="number"&&a>100?fmt(d):d}</span>`;
+    }
+    return "";
+  };
+
+  const rows = [
+    ["📦 Total", stA.total, stB.total],
+    ["✅ Concluídos", stA.concluidos, stB.concluidos],
+    ["⏳ Em Andamento", stA.andamento, stB.andamento],
+    ["💸 Total Reembolsado", fmt(stA.totalReem), fmt(stB.totalReem)],
+    ["🚚 Com Frete", stA.comFrete, stB.comFrete],
+    ["💰 Custo Frete", fmt(stA.totalFrete), fmt(stB.totalFrete)],
+    ["📊 Taxa Conclusão", ((stA.concluidos/stA.total||0)*100).toFixed(1)+"%", ((stB.concluidos/stB.total||0)*100).toFixed(1)+"%"],
+  ];
+
+  document.getElementById("cmp-grid").innerHTML = `
+    <div class="cmp-card">
+      <div class="cmp-title">📄 ${shA.name}</div>
+      ${rows.map(([label, va, vb]) => `<div class="cmp-row"><div class="cmp-label">${label}</div><div class="cmp-val" style="color:var(--blue)">${va}</div></div>`).join("")}
+    </div>
+    <div class="cmp-card">
+      <div class="cmp-title">📄 ${shB.name}</div>
+      ${rows.map(([label, va, vb]) => `<div class="cmp-row"><div class="cmp-label">${label}</div><div class="cmp-val" style="color:var(--purple)">${vb}</div></div>`).join("")}
+    </div>
+    <div class="cmp-card">
+      <div class="cmp-title" style="color:var(--yellow)">△ Diferença (A vs B)</div>
+      ${rows.map(([label, va, vb]) => {
+        const numA = typeof va==="string"?parseFloat(va.replace(/[R$\s.]/g,"").replace(",","."))||0:va;
+        const numB = typeof vb==="string"?parseFloat(vb.replace(/[R$\s.]/g,"").replace(",","."))||0:vb;
+        const d = numA - numB;
+        const isPos = d > 0;
+        const dStr = d === 0 ? "—" : (isPos?"+":"")+d.toFixed(label.includes("R$")||label.includes("Frete")||label.includes("Reimb")?2:0);
+        return `<div class="cmp-row"><div class="cmp-label">${label}</div><div class="cmp-val ${d===0?"":isPos?"cmp-diff-pos":"cmp-diff-neg"}">${dStr}</div></div>`;
+      }).join("")}
+    </div>`;
+}
+
+function computeStatsForRows(rows, meta){
+  const s = {total:rows.length, totalReem:0, totalPago:0, aprovadas:0, andamento:0, canceladas:0, concluidos:0, comFrete:0, totalFrete:0};
+  rows.forEach(r => {
+    const m = (meta||{})[rowId(r)]||{};
+    const st = (r["Status da Devolução / Reembolso"]||"").toLowerCase();
+    s.totalReem += parseBRL(r["Quantia total de reembolsos"]);
+    s.totalPago += parseBRL(r["Valor pago pelo comprador"]);
+    if(st==="aprovada"||st==="disputa aprovada") s.aprovadas++;
+    if(st.includes("devolução")||st.includes("análise")||st.includes("pendente")||st.includes("retornado")||st.includes("coleta")||st==="em disputa") s.andamento++;
+    if(st.includes("cancelada")) s.canceladas++;
+    if(m.done||m.myStatus==="Concluído"||m.myStatus==="Disputa Perdida") s.concluidos++;
+    if(m.frete==="sim"){s.comFrete++;s.totalFrete+=parseBRL(m.freteVal||0);}
+  });
+  return s;
+}
+
+// ══════════════════════════════════════════════════════
+// IMPROVEMENT: KEYBOARD SHORTCUTS
+// ══════════════════════════════════════════════════════
+document.addEventListener("keydown", e => {
+  // ESC closes modal
+  if(e.key === "Escape"){
+    const modal = document.getElementById("modal-overlay");
+    if(modal && modal.classList.contains("open")){ closeModal(); return; }
+  }
+  // "/" focuses global search (only when not typing in an input)
+  if(e.key === "/" && !["INPUT","TEXTAREA","SELECT"].includes(document.activeElement.tagName)){
+    e.preventDefault();
+    const gs = document.getElementById("global-search");
+    if(gs){ gs.focus(); gs.select(); }
+  }
+  // "?" shows shortcut help
+  if(e.key === "?" && !["INPUT","TEXTAREA","SELECT"].includes(document.activeElement.tagName)){
+    showShortcutHelp();
+  }
+});
+
+function showShortcutHelp(){
+  document.getElementById("modal-content").innerHTML = `
+    <div class="modal-title">⌨️ Atalhos de Teclado <button class="modal-close" onclick="closeModal()">✕</button></div>
+    <div style="display:flex;flex-direction:column;gap:10px">
+      ${[
+        ["/","Focar busca global"],
+        ["ESC","Fechar modal"],
+        ["?","Mostrar esta ajuda"],
+      ].map(([k,d]) => `<div style="display:flex;align-items:center;gap:12px;padding:8px 0;border-bottom:1px solid var(--border)22">
+        <span class="kbd">${k}</span>
+        <span style="font-size:13px;color:var(--text2)">${d}</span>
+      </div>`).join("")}
+    </div>`;
+  document.getElementById("modal-overlay").classList.add("open");
+}
+
+
+// ══════════════════════════════════════════════════════
+// UPDATE CHECK — Check GitHub for new version
+// ══════════════════════════════════════════════════════
+// This URL points to a version.json file you'll keep updated on GitHub
+const UPDATE_CHECK_URL = "https://raw.githubusercontent.com/SEU_USUARIO/dashboard-devolucoes/main/version.json";
+
+async function checkForUpdates(){
+  const btn = document.getElementById("btn-check-update");
+  btn.classList.add("checking");
+  btn.innerHTML = '<span class="spin">⟳</span> Verificando…';
+
+  try{
+    const res = await fetch(UPDATE_CHECK_URL + "?t=" + Date.now());
+    if(!res.ok) throw new Error("Não foi possível verificar.");
+    const remote = await res.json();
+    const remoteVer = remote.version;
+    btn.classList.remove("checking");
+
+    if(versionCompare(remoteVer, APP_VERSION) > 0){
+      btn.classList.add("has-update");
+      btn.innerHTML = `🚀 v${remoteVer} disponível!`;
+      // Show update modal
+      document.getElementById("modal-content").innerHTML = `
+        <div class="modal-title">🚀 Nova Versão Disponível! <button class="modal-close" onclick="closeModal()">✕</button></div>
+        <div style="display:flex;gap:8px;align-items:center;margin-bottom:16px">
+          <span style="font-family:var(--mono);font-size:12px;padding:3px 10px;border-radius:8px;background:var(--s3);color:var(--text3)">v${APP_VERSION} (atual)</span>
+          <span style="color:var(--text3)">→</span>
+          <span style="font-family:var(--mono);font-size:12px;padding:3px 10px;border-radius:8px;background:#ffc54018;color:var(--yellow);border:1px solid #ffc54030">v${remoteVer} (nova)</span>
+        </div>
+        ${remote.changelog ? `<div style="background:var(--s2);border-radius:10px;padding:14px;margin-bottom:16px;font-size:12px;color:var(--text2);line-height:1.7">${remote.changelog}</div>` : ""}
+        <div style="background:#00e5a00d;border:1px solid #00e5a022;border-radius:8px;padding:10px 14px;font-size:12px;color:var(--text2);margin-bottom:16px">
+          🛡️ Seus dados no Supabase são preservados. Só o arquivo HTML precisa ser atualizado.
+        </div>
+        <div style="font-size:12px;color:var(--text3);margin-bottom:16px">
+          Para atualizar: baixe o novo arquivo <strong style="color:var(--text)">index.html</strong> e faça upload no seu repositório GitHub substituindo o atual.
+        </div>
+        <div style="display:flex;gap:8px;justify-content:flex-end">
+          <button class="btn btn-ghost" onclick="closeModal()">Fechar</button>
+          <a href="${remote.downloadUrl || '#'}" target="_blank" class="btn btn-primary" style="text-decoration:none">⬇ Baixar nova versão</a>
+        </div>`;
+      document.getElementById("modal-overlay").classList.add("open");
+    } else {
+      btn.innerHTML = "✅ App atualizado";
+      setTimeout(() => { btn.innerHTML = "🔄 Atualizar App"; btn.classList.remove("has-update"); }, 3000);
+      toast("✅ Você já está na versão mais recente!", "success");
+    }
+  } catch(e){
+    btn.classList.remove("checking");
+    btn.innerHTML = "🔄 Atualizar App";
+    toast("Não foi possível verificar atualizações. Verifique sua conexão.", "warn");
+  }
+}
+
+// ══════════════════════════════════════════════════════
+// INIT
+// ══════════════════════════════════════════════════════
+(async()=>{
+  document.getElementById("hdr-meta").textContent="Conectando ao banco…";
+  try{
+    const sheets=await DB.getSheets();
+    _sheetsCache=sheets;
+    renderSheetsList();
+    if(sheets.length){ await loadSheet(sheets[0].id); }
+    else{ const pw=document.getElementById("progress-wrap"); if(pw) pw.style.display="none"; document.getElementById("hdr-meta").textContent="nenhuma planilha ativa"; }
+  }catch(e){
+    const msg = safeErr(e);
+    console.warn("[Init]", msg);
+    toast("⚠️ Erro ao conectar: " + msg,"err",10000);
+    const pw=document.getElementById("progress-wrap"); if(pw) pw.style.display="none";
+    document.getElementById("hdr-meta").textContent="erro de conexão — verifique o console";
+  }
+  initVersionSystem();
+  renderSheetsList();
+})();
+</script>
+</body>
+</html>
